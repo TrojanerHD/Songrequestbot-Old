@@ -1,0 +1,23 @@
+{
+  "name": "songrequestbot-twitch",
+  "version": "1.0.0",
+  "description": "A songrequestbot for Twitch providing YouTube and Spotify",
+  "main": "index.js",
+  "scripts": {
+    "debug": "node index.js"
+  },
+  "author": "Trojaner",
+  "license": "MIT",
+  "dependencies": {
+    "cookie-parser": "^1.4.4",
+    "cors": "^2.8.5",
+    "electron": "^6.0.4",
+    "express": "^4.16.4",
+    "googleapis": "^42.0.0",
+    "jquery": "^3.4.1",
+    "jsdom": "^13.2.0",
+    "request": "latest",
+    "tmi.js": "^1.3.1",
+    "youtube-search": "^1.1.4"
+  }
+}
