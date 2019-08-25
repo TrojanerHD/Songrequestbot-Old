@@ -12,8 +12,10 @@ let refreshToken = undefined
 let viewersWhoWantToSkipTheTrack = []
 const fs = require('fs')
 const secrets = require(`${__dirname}/secrets`)
-const songRequestQueue = {}
+const songRequestQueue = []
 const info = require(`${__dirname}/info`)
+const playing = { 'spotify': false, 'youtube': false }
+let nextSong = undefined
 
 //electron
 let win
@@ -42,7 +44,8 @@ app.on('activate', () => {
   if (win === null) createWindow()
 })
 ipcMain.on('refresh', event => {
-  event.returnValue = { 'https://youtu.be/2c1iSpk3u1A': 'youtube' }
+  event.returnValue = nextSong
+  nextSong = undefined
 })
 
 // Twitch Stuff
@@ -97,6 +100,12 @@ request.get({
 // Register our event handlers (defined below)
     client.on('connected', onConnectedHandler)
     client.on('message', onMessageHandler)
+    ipcMain.on('video-unavailable', (event, args) => {
+      client.say(info['twitch']['username'], `${args['title']} by ${args['artist']} could not be played due to restrictions. Please open the following link in a browser in order to play the song and after that dismiss the alert in the electron window @${info['twitch']['username']}: ${args['url']}`)
+    })
+    ipcMain.on('now-playing', (event, args) => {
+      client.say(songsRoom, `Now playing: ${args['title']} - ${args['artist']} | ${args['url']}`)
+    })
 
     // Connect to Twitch:
     client.connect()
@@ -180,7 +189,7 @@ request.get({
           })
         })
       for (const command of info['commands']['songrequest']) {
-        if (cmd !== command) break
+        if (cmd !== command) continue
         if (args.length === 0) {
           client.say(channel, 'You have to specify the name/url of the track (!sr <query>)')
           return
@@ -191,10 +200,32 @@ request.get({
         allArgs = allArgs.replace(/ $/g, '')
 
         if (allArgs.match(/^http(s|):\/\/open\.spotify\.com\/track\/.*/g)) {
-          songRequestQueue[allArgs.split('/')[allArgs.split('/')['length'] - 1].split('?')[0]] = 'spotify'
+          songRequestQueue.push({ [allArgs.split('/')[allArgs.split('/')['length'] - 1].split('?')[0]]: 'spotify' })
           addTrack(channel, {
             song: allArgs.split('/')[allArgs.split('/')['length'] - 1].split('?')[0],
             platform: 'spotify',
+            url: allArgs
+          })
+          return
+        }
+
+        if (allArgs.match(/^http(s|):\/\/(www.|)youtube.com\/watch\?v=.*/)) {
+          const id = allArgs.split('?v=')[1]
+          songRequestQueue.push({ [id]: 'youtube' })
+          addTrack(channel, {
+            song: id,
+            platform: 'youtube',
+            url: `https://youtu.be/${id}`
+          })
+          return
+        }
+
+        if (allArgs.match(/^http(s|):\/\/youtu.be\/.*/g)) {
+          const id = allArgs.split('/')[allArgs.split('/')['length'] - 1].split('?')[0]
+          songRequestQueue.push({ [id]: 'youtube' })
+          addTrack(channel, {
+            song: id,
+            platform: 'youtube',
             url: allArgs
           })
           return
@@ -232,7 +263,7 @@ request.get({
                 client.say(channel, 'There were no matches. Try it again with other search parameters or create a request with the direct link of that song from Spotify/YouTube.')
                 return
               }
-              songRequestQueue[`https://yout.be/${results[0]['id']}`] = 'youtube'
+              songRequestQueue.push({ [`https://yout.be/${results[0]['id']}`]: 'youtube' })
               addTrack(channel, {
                 platform: 'youtube',
                 artists: results[0]['channelTitle'],
@@ -249,7 +280,7 @@ request.get({
           for (const artist in song.artists) if (song.artists.hasOwnProperty(artist)) artists += song.artists[artist].name + ', '
           artists = artists.replace(/, $/g, '')
 
-          songRequestQueue[song['id']] = 'spotify'
+          songRequestQueue.push({ [song['id']]: 'spotify' })
           addTrack(channel, {
             song: song['id'],
             platform: 'spotify',
@@ -268,6 +299,7 @@ request.get({
         if (err) console.error(err)
       })
       console.log(authMessage)
+      startServer()
     } else
       fs.readFile(refreshTokenFile, 'utf8', (err, data) => {
         if (err) {
@@ -322,14 +354,76 @@ request.get({
           return
         }
 
-        if (body === undefined || body.item === undefined || body.item === null) {
+        if (body === undefined || body['progress_ms'] === 0 && !body['isplaying'])
+          playing['spotify'] = false
+        else if (!playing['spotify'])
+          playing['spotify'] = true
+
+        if (!playing['spotify'] && !playing['youtube'] && songRequestQueue['length'] !== 0)
+          switch (Object.values(songRequestQueue[0])[0]) {
+            case 'youtube':
+              nextSong = Object.keys(songRequestQueue[0])[0]
+              playing['youtube'] = true
+              songRequestQueue.shift()
+              break
+            case 'spotify':
+              const nextSongSpotify = Object.keys(songRequestQueue[0])[0]
+              request.get({
+                url: 'https://api.spotify.com/v1/me/player/devices',
+                headers: {
+                  Authorization: `Bearer ${accessToken}`
+                }
+              }, (error, response, body) => {
+                if (error) {
+                  console.error(error)
+                  return
+                }
+                request.put({
+                  url: `https://api.spotify.com/v1/me/player/play?device_id=${JSON.parse(body)['devices'][0]['id']}`,
+                  headers: {
+                    Authorization: `Bearer ${accessToken}`
+                  },
+                  body: {
+                    uris: [
+                      `spotify:track:${nextSongSpotify}`
+                    ],
+                    position_ms: 0
+                  },
+                  json: true
+                }, error => {
+                  if (error) console.error(error)
+                })
+              })
+              songRequestQueue.shift()
+              playing['spotify'] = true
+              break
+          }
+
+        if (body === undefined || body['item'] === undefined || body['item'] === null) {
           updateFunction()
           return
         }
-        const playingBody = body
+        const trackName = body['item']['name'],
+          trackLink = body.item['external_urls']['spotify']
+        let artists = ''
+        for (const artist in body['item']['artists']) if (body['item']['artists'].hasOwnProperty(artist)) artists += `${body['item']['artists'][artist]['name']}, `
+        artists = artists.replace(/, $/g, '')
+
+        if (current['name'] === trackName && current['artists'] === artists && current['link'] === trackLink || body['progress_ms'] === 0 && !body['isplaying']) {
+          updateFunction()
+          return
+        }
+        current['name'] = trackName
+        current['artists'] = artists
+        current['link'] = trackLink
+        client.say(songsRoom, `Now playing: ${trackName} - ${artists} | ${trackLink}`)
+        viewersWhoWantToSkipTheTrack = []
+
         request.get({
-          url: `https://api.spotify.com/v1/tracks/${body.item.id}`,
-          headers: { Authorization: `Bearer ${accessToken}` },
+          url: 'https://api.spotify.com/v1/me/playlists?limit=50',
+          headers: {
+            Authorization: `Bearer ${accessToken}`
+          },
           json: true
         }, (error, response, body) => {
           if (error) {
@@ -337,23 +431,25 @@ request.get({
             updateFunction()
             return
           }
-          const trackName = playingBody.item.name,
-            trackLink = playingBody.item['external_urls']['spotify']
-          let artists = ''
-          for (const artist in body.artists) if (body.artists.hasOwnProperty(artist)) artists += `${body.artists[artist].name}, `
-          artists = artists.replace(/, $/g, '')
-          if (current.name === trackName && current.artists === artists && current.link === trackLink) {
+
+          if (!'items' in body) {
             updateFunction()
             return
           }
-          current.name = trackName
-          current.artists = artists
-          current.link = trackLink
-          client.say(songsRoom, `Now playing: ${trackName} - ${artists} | ${trackLink}`)
-          viewersWhoWantToSkipTheTrack = []
+
+          let playlistId = undefined
+          if ('error' in body && body['error']['status'] === 401 && typeof message !== 'undefined' && message === 'The access token expired') {
+            getAccessToken()
+            update()
+            return
+          }
+
+          body.items.forEach((item) => {
+            if (item.name === 'Song Requests') playlistId = item['id']
+          })
 
           request.get({
-            url: 'https://api.spotify.com/v1/me/playlists?limit=50',
+            url: `https://api.spotify.com/v1/playlists/${playlistId}?fields=${encodeURIComponent('tracks.items')}`,
             headers: {
               Authorization: `Bearer ${accessToken}`
             },
@@ -365,56 +461,26 @@ request.get({
               return
             }
 
-            if (!'items' in body) {
-              updateFunction()
-              return
-            }
-
-            let playlistId = undefined
-            if ('error' in body && body.error.status === 401 && typeof message !== 'undefined' && message === 'The access token expired') {
-              getAccessToken()
-              update()
-              return
-            }
-
-            body.items.forEach((item) => {
-              if (item.name === 'Song Requests') playlistId = item.id
-            })
-
-            request.get({
-              url: `https://api.spotify.com/v1/playlists/${playlistId}?fields=${encodeURIComponent('tracks.items')}`,
-              headers: {
-                Authorization: `Bearer ${accessToken}`
-              },
-              json: true
-            }, (error, response, body) => {
-              if (error) {
-                console.log(error)
-                updateFunction()
-                return
+            body.tracks.items.forEach((item) => {
+              if (item.track['external_urls']['spotify'] === trackLink) {
+                request.del({
+                  url: `https://api.spotify.com/v1/playlists/${playlistId}/tracks`,
+                  headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json'
+                  },
+                  body: {
+                    'tracks': [
+                      {
+                        uri: `spotify:track:${item.track.id}`
+                      }
+                    ]
+                  },
+                  json: true
+                })
               }
-
-              body.tracks.items.forEach((item) => {
-                if (item.track['external_urls']['spotify'] === trackLink) {
-                  request.del({
-                    url: `https://api.spotify.com/v1/playlists/${playlistId}/tracks`,
-                    headers: {
-                      Authorization: `Bearer ${accessToken}`,
-                      'Content-Type': 'application/json'
-                    },
-                    body: {
-                      'tracks': [
-                        {
-                          uri: `spotify:track:${item.track.id}`
-                        }
-                      ]
-                    },
-                    json: true
-                  })
-                }
-              })
-              updateFunction()
             })
+            updateFunction()
           })
         })
       })
@@ -431,11 +497,23 @@ request.get({
       // url,
       // name
       switch (songRequest['platform']) {
+        case 'youtube':
+          request.get({
+            url: `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${songRequest['song']}&key=${secrets['youtube']['key']}`
+          }, (error, response, body) => {
+            if (error) {
+              console.error(error)
+              return
+            }
+
+            const snippet = JSON.parse(body)['items'][0]['snippet']
+            songRequest['name'] = snippet['title']
+            songRequest['artists'] = snippet['channelTitle']
+            client.say(channel, `${songRequest['name']} by ${songRequest['artists']} is in the queue on place ${songRequestQueue['length']} | ${songRequest['url']}`)
+          })
+          break
         case 'spotify':
           client.say(channel, `${songRequest['name'] !== undefined && songRequest['artists'] !== undefined ? `${songRequest['name']} by ${songRequest['artists']}` : 'Your song'} is in the queue on place ${songRequestQueue['length']} | ${songRequest['url']}`)
-          break
-        case 'youtube':
-          client.say(channel, `${songRequest['name']} by ${songRequest['artists']} is in the queue | ${songRequest['url']}`)
           break
       }
     }
@@ -444,7 +522,7 @@ request.get({
       console.log('Listening on 8888')
 
       const redirect_uri = 'http://localhost:8888/callback' // Your redirect uri
-      const scopes = 'user-read-currently-playing user-modify-playback-state playlist-read-private playlist-modify-private'
+      const scopes = 'user-read-currently-playing user-modify-playback-state playlist-read-private playlist-modify-private user-read-playback-state'
       /**
        * Generates a random string containing numbers and letters
        * @param  {number} length The length of the string
@@ -554,4 +632,9 @@ request.get({
       app.listen(8888)
     }
   })
+})
+
+ipcMain.on('done', () => {
+  if (nextSong !== undefined) return
+  playing['youtube'] = false
 })
