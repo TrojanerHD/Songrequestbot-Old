@@ -293,7 +293,7 @@ request.get({
     }
 
     const refreshTokenFile = 'refresh_token.txt'
-    const authMessage = 'Please head to http://localhost:8888 and log in to activate the bot.'
+    const authMessage = 'Please head to http://localhost:8888/login and log in to activate the bot.'
     if (!fs.existsSync(refreshTokenFile)) {
       fs.writeFile(refreshTokenFile, '', err => {
         if (err) console.error(err)
