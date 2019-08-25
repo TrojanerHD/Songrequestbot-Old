@@ -1,7 +1,6 @@
 # Song Request Bot
 Plays music using Spotify or YouTube, requested from Twitch chat.
 
-**Important note**: The bot is not finished yet and will not work yet. 
 ## Getting Started
 These instructions will show you how to install and use the bot.
 
@@ -9,7 +8,7 @@ These instructions will show you how to install and use the bot.
 + [Node.js](https://nodejs.org)
 
 ### Installing
-+ Go to the [releases-page](https://github.com/TrojanerHD/Minecraft-Music-Generator/releases), download the newest release as a `.zip`-file and unpack it in an empty folder.
++ Go to the [releases-page](https://github.com/TrojanerHD/Songrequestbot/releases), download the newest release as a `.zip`-file and unpack it in an empty folder.
 + Then you will have to manually install the node_modules:
   ```BAT
   cd "path/to/the/folder/where/you/unpacked/the/zip"
@@ -73,7 +72,7 @@ Since the program is currently in alpha, you have to run the program via the com
   ```
 When you start the program for the first time, it will demand you in the command prompt window to head to a specific website and log in with your Spotify account. This is necessary to search for songs and play songs on Spotify  
 
-Now you should see a window with a YouTube player which will play songs (Or at least will it do that once the bot development is finished).
+Now you should see a window with a YouTube player which will play songs.
 
 ## Built With
 * [Node.js](https://nodejs.org) - Server side JavaScript
@@ -84,7 +83,7 @@ Now you should see a window with a YouTube player which will play songs (Or at l
 Please read [CONTRIBUTING.md](https://gist.github.com/PurpleBooth/b24679402957c63ec426) for details on our code of conduct, and the process for submitting pull requests to us.
 
 ## Versioning
-We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/TrojanerHD/Minecraft-Music-Generator/tags). 
+We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/TrojanerHD/Songrequestbot/tags). 
 
 ## Authors
 * **Trojaner** - *Initial work* - [TrojanerHD](https://github.com/TrojanerHD)
