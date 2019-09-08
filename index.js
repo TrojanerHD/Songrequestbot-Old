@@ -117,6 +117,7 @@ request.get({
     function onMessageHandler (target, context, msg, self) {
       if (self) return
       const channel = target.replace(/^#/g, '')
+      if (!msg.startsWith('!')) return
       msg = msg.replace(/^!/g, '')
       const args = msg.split(' ')
       args.shift()
@@ -145,10 +146,10 @@ request.get({
           viewersWhoWantToSkipTheTrack.push(context.username)
           if (viewers * 25 / 100 > viewersWhoWantToSkipTheTrack.length) {
             if (context.username in viewersWhoWantToSkipTheTrack) {
-              client.say(channel, `You already want to skip that track. To skip it, 25% of the viewers are needed to skip it. [${viewersWhoWantToSkipTheTrack['length']}|${viewers}]`)
+              client.say(channel, `You already want to skip that track. To skip it, 25% of the viewers are needed to skip it. [${viewersWhoWantToSkipTheTrack['length']}]`)
               return
             }
-            client.say(channel, `If 25% of the viewers want to skip then the track will be skipped. [${viewersWhoWantToSkipTheTrack['length']}|${viewers}]`)
+            client.say(channel, `If 25% of the viewers want to skip then the track will be skipped. [${viewersWhoWantToSkipTheTrack['length']}]`)
             return
           }
 
@@ -183,7 +184,7 @@ request.get({
                 },
                 json: true
               }, () => {
-                client.say(channel, `Alright, the song was skipped. [${viewersWhoWantToSkipTheTrack.length}|${viewers}]`)
+                client.say(channel, `Alright, the song was skipped. [${viewersWhoWantToSkipTheTrack.length}]`)
               })
             })
           })
@@ -509,7 +510,7 @@ request.get({
             const snippet = JSON.parse(body)['items'][0]['snippet']
             songRequest['name'] = snippet['title']
             songRequest['artists'] = snippet['channelTitle']
-            client.say(channel, `${songRequest['name']} by ${songRequest['artists']} is in the queue on place ${songRequestQueue['length']} | ${songRequest['url']}`)
+            client.say(channel, `${songRequest['name'].replace(/^([!\/.])/, '')} by ${songRequest['artists']} is in the queue on place ${songRequestQueue['length']} | ${songRequest['url']}`)
           })
           break
         case 'spotify':
