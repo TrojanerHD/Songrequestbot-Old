@@ -5,7 +5,7 @@ const cors = require('cors')
 const querystring = require('querystring')
 const cookieParser = require('cookie-parser')
 const search = require('youtube-search')
-const { app, BrowserWindow, ipcMain } = require('electron')
+const { ipcMain } = require('electron')
 const current = {}
 let accessToken = undefined
 let refreshToken = undefined
@@ -15,38 +15,9 @@ const secrets = require(`${__dirname}/secrets`)
 const songRequestQueue = []
 const info = require(`${__dirname}/info`)
 const playing = { 'spotify': false, 'youtube': false }
+const electron = require(`${__dirname}/electron`)
+electron.createElectronInstance()
 let nextSong = undefined
-
-//electron
-let win
-
-function createWindow () {
-  win = new BrowserWindow({
-    height: 720,
-    width: 1080,
-    webPreferences: {
-      nodeIntegration: true
-    }
-  })
-  win.loadURL(`file://${__dirname}/html/index.html`)
-}
-
-app.on('ready', createWindow)
-app.on('window-all-closed', () => {
-  // On macOS it is common for applications and their menu bar
-  // to stay active until the user quits explicitly with Cmd + Q
-  if (process.platform !== 'darwin') app.quit()
-})
-
-app.on('activate', () => {
-  // On macOS it's common to re-create a window in the app when the
-  // dock icon is clicked and there are no other windows open.
-  if (win === null) createWindow()
-})
-ipcMain.on('refresh', event => {
-  event.returnValue = nextSong
-  nextSong = undefined
-})
 
 // Twitch Stuff
 request.get({
@@ -55,7 +26,9 @@ request.get({
     Accept: 'application/vnd.twitchtv.v5+json',
     'Client-ID': secrets['twitch']['client-id']
   }
-}, (error, response, body) => {
+}, twitchUsername)
+
+function twitchUsername (error, response, body) {
   if (error) {
     console.error(error)
     return
@@ -68,7 +41,9 @@ request.get({
       'Client-ID': secrets['twitch']['client-id'],
       Authorization: `OAuth ${secrets['twitch']['password'].split(':')[1]}`
     }
-  }, (error, response, body) => {
+  }, twitchRoom)
+
+  function twitchRoom (error, response, body) {
     if (error) {
       console.error(error)
       return
@@ -100,12 +75,17 @@ request.get({
 // Register our event handlers (defined below)
     client.on('connected', onConnectedHandler)
     client.on('message', onMessageHandler)
-    ipcMain.on('video-unavailable', (event, args) => {
+    ipcMain.on('video-unavailable', videoUnavailableHandler)
+
+    function videoUnavailableHandler (event, args) {
       client.say(info['twitch']['username'], `${args['title']} by ${args['artist']} could not be played due to restrictions. Please open the following link in a browser in order to play the song and after that dismiss the alert in the electron window @${info['twitch']['username']}: ${args['url']}`)
-    })
-    ipcMain.on('now-playing', (event, args) => {
+    }
+
+    ipcMain.on('now-playing', youtubeNowPlaying)
+
+    function youtubeNowPlaying (event, args) {
       client.say(songsRoom, `Now playing: ${args['title']} - ${args['artist']} | ${args['url']}`)
-    })
+    }
 
     // Connect to Twitch:
     client.connect()
@@ -124,28 +104,30 @@ request.get({
 
       const cmd = msg.split(' ')[0].toLowerCase()
 
-      if (cmd === 'skip')
+      if (cmd === 'skip') {
         request.get({
           headers: {
             'Client-ID': secrets['twitch']['client-id']
           },
           url: `https://api.twitch.tv/helix/streams?user_login=${channel}`,
           json: true
-        }, (error, response, body) => {
-          if (body.data.length === 0) {
-            client.say(target, `Error: Streamer ${context['display-name']} is not live.`)
-            return
-          }
+        }, checkViewersForSkip)
 
+        function checkViewersForSkip (error, response, body) {
           if (error) {
             console.error(error)
             return
           }
-          const viewers = body.data[0]['viewer_count']
 
-          viewersWhoWantToSkipTheTrack.push(context.username)
-          if (viewers * 25 / 100 > viewersWhoWantToSkipTheTrack.length) {
-            if (context.username in viewersWhoWantToSkipTheTrack) {
+          if (body['data']['length'] === 0) {
+            client.say(target, `Error: Streamer ${context['display-name']} is not live.`)
+            return
+          }
+          const viewers = body['data'][0]['viewer_count']
+
+          viewersWhoWantToSkipTheTrack.push(context['username'])
+          if (viewers * 25 / 100 > viewersWhoWantToSkipTheTrack['length']) {
+            if (context['username'] in viewersWhoWantToSkipTheTrack) {
               client.say(channel, `You already want to skip that track. To skip it, 25% of the viewers are needed to skip it. [${viewersWhoWantToSkipTheTrack['length']}]`)
               return
             }
@@ -163,41 +145,28 @@ request.get({
             headers: {
               Authorization: `Bearer ${accessToken}`
             }
-          }, error => {
+          }, skipSpotify)
+
+          function skipSpotify (error) {
             if (error) {
               client.say(channel, 'Something went wrong... :/')
               console.log(error)
               return
             }
 
-            request.get({
-              url: 'https://api.spotify.com/v1/me/player/currently-playing',
-              headers: {
-                Authorization: `Bearer ${accessToken}`
-              },
-              json: true
-            }, (error, response, body) => {
-              request.get({
-                url: `https://api.spotify.com/v1/tracks/${body.item.id}`,
-                headers: {
-                  Authorization: `Bearer ${accessToken}`
-                },
-                json: true
-              }, () => {
-                client.say(channel, `Alright, the song was skipped. [${viewersWhoWantToSkipTheTrack.length}]`)
-              })
-            })
-          })
-        })
+            client.say(channel, `Alright, the song was skipped. [${viewersWhoWantToSkipTheTrack['length']}]`)
+          }
+        }
+      }
       for (const command of info['commands']['songrequest']) {
         if (cmd !== command) continue
-        if (args.length === 0) {
+        if (args['length'] === 0) {
           client.say(channel, 'You have to specify the name/url of the track (!sr <query>)')
           return
         }
 
         let allArgs = ''
-        for (const arg in args) if (args.hasOwnProperty(arg)) allArgs += `${args[arg]} `
+        for (const arg of args) allArgs += `${arg} `
         allArgs = allArgs.replace(/ $/g, '')
 
         if (allArgs.match(/^http(s|):\/\/open\.spotify\.com\/track\/.*/g)) {
@@ -211,7 +180,11 @@ request.get({
         }
 
         if (allArgs.match(/^http(s|):\/\/(www.|)youtube.com\/watch\?v=.*/)) {
-          const id = allArgs.split('?v=')[1]
+          const id = allArgs.split(/[?&]v=/)[1].split('&')[0]
+          if (id.match(/[?&]/)) {
+            client.say(target, 'This does not look like a correct youtube link')
+            return
+          }
           songRequestQueue.push({ [id]: 'youtube' })
           addTrack(channel, {
             song: id,
@@ -223,6 +196,10 @@ request.get({
 
         if (allArgs.match(/^http(s|):\/\/youtu.be\/.*/g)) {
           const id = allArgs.split('/')[allArgs.split('/')['length'] - 1].split('?')[0]
+          if (id.match(/[?&]/)) {
+            client.say(target, 'This does not look like a correct youtube link')
+            return
+          }
           songRequestQueue.push({ [id]: 'youtube' })
           addTrack(channel, {
             song: id,
@@ -238,7 +215,9 @@ request.get({
             Authorization: `Bearer ${accessToken}`
           },
           json: true
-        }, (error, request, body) => {
+        }, playInitializer)
+
+        function playInitializer (error, request, body) {
           if (error) {
             console.log(error)
             return
@@ -252,13 +231,19 @@ request.get({
             onMessageHandler(target, context, msg, self)
             return
           }
+
           if (!body['tracks'] || !body['tracks']['items'][0]) {
             search(allArgs, {
               maxResults: 1,
               key: secrets['youtube']['key'],
               type: 'video'
-            }, (err, results) => {
-              if (err) return console.error(err)
+            }, searchResults)
+
+            function searchResults (err, results) {
+              if (err) {
+                console.error(err)
+                return
+              }
 
               if (results['length'] === 0) {
                 client.say(channel, 'There were no matches. Try it again with other search parameters or create a request with the direct link of that song from Spotify/YouTube.')
@@ -272,7 +257,8 @@ request.get({
                 name: results[0]['title'],
                 song: results[0]['id']
               })
-            })
+            }
+
             return
           }
 
@@ -289,20 +275,25 @@ request.get({
             url: song['external_urls']['spotify'],
             name: song['name']
           })
-        })
+        }
       }
     }
 
     const refreshTokenFile = 'refresh_token.txt'
     const authMessage = 'Please head to http://localhost:8888/login and log in to activate the bot.'
     if (!fs.existsSync(refreshTokenFile)) {
-      fs.writeFile(refreshTokenFile, '', err => {
+      fs.writeFile(refreshTokenFile, '', createRefreshTokenFile)
+
+      function createRefreshTokenFile (err) {
         if (err) console.error(err)
-      })
+      }
+
       console.log(authMessage)
       startServer()
-    } else
-      fs.readFile(refreshTokenFile, 'utf8', (err, data) => {
+    } else {
+      fs.readFile(refreshTokenFile, 'utf8', readRefreshTokenFile)
+
+      function readRefreshTokenFile (err, data) {
         if (err) {
           console.error(err)
           startServer()
@@ -316,7 +307,8 @@ request.get({
         refreshToken = data
         getAccessToken()
         update()
-      })
+      }
+    }
 
     // Spotify API
     const client_id = secrets['spotify']['id'] // Your client id
@@ -332,13 +324,15 @@ request.get({
           refresh_token: refreshToken
         },
         json: true
-      }, (error, response, body) => {
+      }, tokenResponse)
+
+      function tokenResponse (error, response, body) {
         if (error) {
           console.error(error)
           return
         }
-        accessToken = body.access_token
-      })
+        accessToken = body['access_token']
+      }
     }
 
     function update () {
@@ -348,7 +342,9 @@ request.get({
           Authorization: `Bearer ${accessToken}`
         },
         json: true
-      }, (error, response, body) => {
+      }, currentlyPlaying)
+
+      function currentlyPlaying (error, response, body) {
         if (error) {
           console.log(error)
           updateFunction()
@@ -360,7 +356,7 @@ request.get({
         else if (!playing['spotify'])
           playing['spotify'] = true
 
-        if (!playing['spotify'] && !playing['youtube'] && songRequestQueue['length'] !== 0)
+        if (!playing['spotify'] && !playing['youtube'] && songRequestQueue['length'] !== 0) {
           switch (Object.values(songRequestQueue[0])[0]) {
             case 'youtube':
               nextSong = Object.keys(songRequestQueue[0])[0]
@@ -374,38 +370,45 @@ request.get({
                 headers: {
                   Authorization: `Bearer ${accessToken}`
                 }
-              }, (error, response, body) => {
-                if (error) {
-                  console.error(error)
-                  return
-                }
-                request.put({
-                  url: `https://api.spotify.com/v1/me/player/play?device_id=${JSON.parse(body)['devices'][0]['id']}`,
-                  headers: {
-                    Authorization: `Bearer ${accessToken}`
-                  },
-                  body: {
-                    uris: [
-                      `spotify:track:${nextSongSpotify}`
-                    ],
-                    position_ms: 0
-                  },
-                  json: true
-                }, error => {
-                  if (error) console.error(error)
-                })
-              })
+              }, spotifyDevices)
+
+            function spotifyDevices (error, response, body) {
+              if (error) {
+                console.error(error)
+                return
+              }
+
+              request.put({
+                url: `https://api.spotify.com/v1/me/player/play?device_id=${JSON.parse(body)['devices'][0]['id']}`,
+                headers: {
+                  Authorization: `Bearer ${accessToken}`
+                },
+                body: {
+                  uris: [
+                    `spotify:track:${nextSongSpotify}`
+                  ],
+                  position_ms: 0
+                },
+                json: true
+              }, spotifyPlayResponse)
+
+              function spotifyPlayResponse (error1) {
+                if (error1) console.error(error1)
+              }
+            }
+
               songRequestQueue.shift()
               playing['spotify'] = true
               break
           }
+        }
 
         if (body === undefined || body['item'] === undefined || body['item'] === null) {
           updateFunction()
           return
         }
         const trackName = body['item']['name'],
-          trackLink = body.item['external_urls']['spotify']
+          trackLink = body['item']['external_urls']['spotify']
         let artists = ''
         for (const artist in body['item']['artists']) if (body['item']['artists'].hasOwnProperty(artist)) artists += `${body['item']['artists'][artist]['name']}, `
         artists = artists.replace(/, $/g, '')
@@ -420,71 +423,8 @@ request.get({
         client.say(songsRoom, `Now playing: ${trackName} - ${artists} | ${trackLink}`)
         viewersWhoWantToSkipTheTrack = []
 
-        request.get({
-          url: 'https://api.spotify.com/v1/me/playlists?limit=50',
-          headers: {
-            Authorization: `Bearer ${accessToken}`
-          },
-          json: true
-        }, (error, response, body) => {
-          if (error) {
-            console.log(error)
-            updateFunction()
-            return
-          }
-
-          if (!'items' in body) {
-            updateFunction()
-            return
-          }
-
-          let playlistId = undefined
-          if ('error' in body && body['error']['status'] === 401 && typeof message !== 'undefined' && message === 'The access token expired') {
-            getAccessToken()
-            update()
-            return
-          }
-
-          body.items.forEach((item) => {
-            if (item.name === 'Song Requests') playlistId = item['id']
-          })
-
-          request.get({
-            url: `https://api.spotify.com/v1/playlists/${playlistId}?fields=${encodeURIComponent('tracks.items')}`,
-            headers: {
-              Authorization: `Bearer ${accessToken}`
-            },
-            json: true
-          }, (error, response, body) => {
-            if (error) {
-              console.log(error)
-              updateFunction()
-              return
-            }
-
-            body.tracks.items.forEach((item) => {
-              if (item.track['external_urls']['spotify'] === trackLink) {
-                request.del({
-                  url: `https://api.spotify.com/v1/playlists/${playlistId}/tracks`,
-                  headers: {
-                    Authorization: `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json'
-                  },
-                  body: {
-                    'tracks': [
-                      {
-                        uri: `spotify:track:${item.track.id}`
-                      }
-                    ]
-                  },
-                  json: true
-                })
-              }
-            })
-            updateFunction()
-          })
-        })
-      })
+        updateFunction()
+      }
     }
 
     function updateFunction () {
@@ -501,17 +441,20 @@ request.get({
         case 'youtube':
           request.get({
             url: `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${songRequest['song']}&key=${secrets['youtube']['key']}`
-          }, (error, response, body) => {
-            if (error) {
-              console.error(error)
-              return
-            }
+          }, youtubeVideoMetadata)
 
-            const snippet = JSON.parse(body)['items'][0]['snippet']
-            songRequest['name'] = snippet['title']
-            songRequest['artists'] = snippet['channelTitle']
-            client.say(channel, `${songRequest['name'].replace(/^([!\/.])/, '')} by ${songRequest['artists']} is in the queue on place ${songRequestQueue['length']} | ${songRequest['url']}`)
-          })
+        function youtubeVideoMetadata (error, response, body) {
+          if (error) {
+            console.error(error)
+            return
+          }
+
+          const snippet = JSON.parse(body)['items'][0]['snippet']
+          songRequest['name'] = snippet['title']
+          songRequest['artists'] = snippet['channelTitle']
+          client.say(channel, `${songRequest['name'].replace(/^([!\/.])/, '')} by ${songRequest['artists']} is in the queue on place ${songRequestQueue['length']} | ${songRequest['url']}`)
+        }
+
           break
         case 'spotify':
           client.say(channel, `${songRequest['name'] !== undefined && songRequest['artists'] !== undefined ? `${songRequest['name']} by ${songRequest['artists']}` : 'Your song'} is in the queue on place ${songRequestQueue['length']} | ${songRequest['url']}`)
@@ -533,7 +476,7 @@ request.get({
         let text = ''
         const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
 
-        for (let i = 0; i < length; i++) text += possible.charAt(Math.floor(Math.random() * possible.length))
+        for (let i = 0; i < length; i++) text += possible.charAt(Math.floor(Math.random() * possible['length']))
         return text
       }
 
@@ -541,27 +484,30 @@ request.get({
 
       const app = express()
 
-      app.use(express.static(__dirname + '/public'))
+      app.use(express.static(`${__dirname}/public`))
         .use(cors())
         .use(cookieParser())
 
-      app.get('/login', (req, res) => {
+      app.get('/login', loginResponse)
+
+      function loginResponse (req, res) {
 
         const state = generateRandomString(16)
         res.cookie(stateKey, state)
 
         // your application requests authorization
-        res.redirect('https://accounts.spotify.com/authorize?' +
-          querystring.stringify({
-            response_type: 'code',
-            client_id: client_id,
-            scope: scopes,
-            redirect_uri: redirect_uri,
-            state: state
-          }))
-      })
+        res.redirect(`https://accounts.spotify.com/authorize?${querystring.stringify({
+          response_type: 'code',
+          client_id: client_id,
+          scope: scopes,
+          redirect_uri: redirect_uri,
+          state: state
+        })}`)
+      }
 
-      app.get('/callback', (req, res) => {
+      app.get('/callback', callbackResponse)
+
+      function callbackResponse (req, res) {
         // your application requests refresh and access tokens
         // after checking the state parameter
 
@@ -573,7 +519,7 @@ request.get({
             error: 'state_mismatch'
           })}`)
         } else {
-          const authOptions = {
+          request.post({
             url: 'https://accounts.spotify.com/api/token',
             form: {
               code: code,
@@ -584,18 +530,21 @@ request.get({
               Authorization: `Basic ${new Buffer(`${client_id}:${client_secret}`).toString('base64')}`
             },
             json: true
-          }
+          }, authTokenResponse)
 
-          request.post(authOptions, (error, response, body) => {
+          function authTokenResponse (error, response, body) {
             if (error) {
               console.error(error)
               return
             }
-            if (response.statusCode === 200) {
-              refreshToken = body.refresh_token
-              fs.writeFile(refreshTokenFile, refreshToken, err => {
+            if (response['statusCode'] === 200) {
+              refreshToken = body['refresh_token']
+              fs.writeFile(refreshTokenFile, refreshToken, writeRefreshTokenToFileResponse)
+
+              function writeRefreshTokenToFileResponse (err) {
                 if (err) console.error(err)
-              })
+              }
+
               getAccessToken()
               update()
             } else {
@@ -603,14 +552,18 @@ request.get({
                 error: 'invalid_token'
               })}`)
             }
-          })
+          }
         }
-      })
-      app.get('/refresh_token', (req, res) => {
+      }
+
+      app.get('/refresh_token', refreshTokenResponse)
+
+      function refreshTokenResponse (req, res) {
 
         // requesting access token from refresh token
         const refresh_token = req['query']['refresh_token']
-        const authOptions = {
+
+        request.post({
           url: 'https://accounts.spotify.com/api/token',
           headers: {
             Authorization: `Basic ${new Buffer(`${client_id}:${client_secret}`).toString('base64')}`
@@ -620,22 +573,30 @@ request.get({
             refresh_token: refresh_token
           },
           json: true
-        }
+        }, refreshTokenGotResponse)
 
-        request.post(authOptions, function (error, response, body) {
+        function refreshTokenGotResponse (error, response, body) {
           if (!(!error && response.statusCode === 200)) return
           const access_token = body['access_token']
-          res.send({
-            access_token: access_token
-          })
-        })
-      })
+          res.send({ access_token })
+        }
+      }
+
       app.listen(8888)
     }
-  })
-})
+  }
+}
 
-ipcMain.on('done', () => {
+ipcMain.on('done', youtubeVideoDone)
+
+function youtubeVideoDone () {
   if (nextSong !== undefined) return
   playing['youtube'] = false
-})
+}
+
+ipcMain.on('refresh', onYoutubePlayerRefresh)
+
+function onYoutubePlayerRefresh (event) {
+  event['returnValue'] = nextSong
+  nextSong = undefined
+}

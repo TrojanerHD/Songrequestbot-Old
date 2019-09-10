@@ -66,10 +66,11 @@ function onPlayerStateChange (event) {
       playing = false
       started = false
       ipcRenderer.send('done')
+      break
     case 1:
-      if (currentlyPlaying === videoData['video_id'])
-        break
+      if (currentlyPlaying === videoData['video_id']) break
       currentlyPlaying = videoData['video_id']
       ipcRenderer.send('now-playing', videoArgs)
+      break
   }
 }
