@@ -1,6 +1,6 @@
 const tmi = require('tmi.js')
 const express = require('express') // Express web server framework
-const request = require('request') // "Request" library
+const request = require('request-promise') // "Request" library
 const cors = require('cors')
 const querystring = require('querystring')
 const cookieParser = require('cookie-parser')
@@ -16,44 +16,41 @@ const songRequestQueue = []
 const info = require(`${__dirname}/info`)
 const playing = { 'spotify': false, 'youtube': false }
 const electron = require(`${__dirname}/electron`)
-electron.createElectronInstance()
+electron()
 let nextSong = undefined
 
 // Twitch Stuff
-request.get({
-  url: `https://api.twitch.tv/helix/users?login=${info['twitch']['username']}`,
-  headers: {
-    Accept: 'application/vnd.twitchtv.v5+json',
-    'Client-ID': secrets['twitch']['client-id']
-  }
-}, twitchUsername)
+async function twitchLogin () {
+  return await request.get({
+    url: `https://api.twitch.tv/helix/users?login=${info['twitch']['username']}`,
+    headers: {
+      Accept: 'application/vnd.twitchtv.v5+json',
+      'Client-ID': secrets['twitch']['client-id']
+    }
+  })
+}
 
-function twitchUsername (error, response, body) {
-  if (error) {
-    console.error(error)
-    return
-  }
-  const userId = JSON.parse(body)['data'][0]['id']
-  request.get({
+async function twitchRoom (userId) {
+  return await request.get({
     url: `https://api.twitch.tv/kraken/chat/${userId}/rooms`,
     headers: {
       Accept: 'application/vnd.twitchtv.v5+json',
       'Client-ID': secrets['twitch']['client-id'],
       Authorization: `OAuth ${secrets['twitch']['password'].split(':')[1]}`
     }
-  }, twitchRoom)
+  })
+}
 
-  function twitchRoom (error, response, body) {
-    if (error) {
-      console.error(error)
-      return
-    }
+async function main () {
+  try {
+    const twitchLoginResult = await twitchLogin()
+    const userId = JSON.parse(twitchLoginResult)['data'][0]['id']
+
+    const twitchRoomResult = await twitchRoom(userId)
     let roomId = undefined
-    for (const room of JSON.parse(body)['rooms']) {
-      if (room['name'] === 'songs') {
-        roomId = room['_id']
-        break
-      }
+    for (const room of JSON.parse(twitchRoomResult)['rooms']) if (room['name'] === 'songs') {
+      roomId = room['_id']
+      break
     }
     const songsRoom = roomId !== undefined ? `#chatrooms:${userId}:${roomId}` : undefined
     const channels = [
@@ -111,14 +108,9 @@ function twitchUsername (error, response, body) {
           },
           url: `https://api.twitch.tv/helix/streams?user_login=${channel}`,
           json: true
-        }, checkViewersForSkip)
+        }).then(checkViewersForSkip).catch(console.error)
 
-        function checkViewersForSkip (error, response, body) {
-          if (error) {
-            console.error(error)
-            return
-          }
-
+        function checkViewersForSkip (body) {
           if (body['data']['length'] === 0) {
             client.say(target, `Error: Streamer ${context['display-name']} is not live.`)
             return
@@ -145,15 +137,14 @@ function twitchUsername (error, response, body) {
             headers: {
               Authorization: `Bearer ${accessToken}`
             }
-          }, skipSpotify)
+          }).then(skipSpotify).catch(skipSpotifyError)
 
-          function skipSpotify (error) {
-            if (error) {
-              client.say(channel, 'Something went wrong... :/')
-              console.log(error)
-              return
-            }
+          function skipSpotifyError (error) {
+            client.say(channel, 'Something went wrong... :/')
+            console.error(error)
+          }
 
+          function skipSpotify () {
             client.say(channel, `Alright, the song was skipped. [${viewersWhoWantToSkipTheTrack['length']}]`)
           }
         }
@@ -215,19 +206,15 @@ function twitchUsername (error, response, body) {
             Authorization: `Bearer ${accessToken}`
           },
           json: true
-        }, playInitializer)
+        }).then(playInitializer).catch(console.error)
 
-        function playInitializer (error, request, body) {
-          if (error) {
-            console.log(error)
-            return
-          }
+        function playInitializer (body) {
           if (!accessToken) {
             client.say(channel, `Something went wrong... maybe the Spotify-API is not running? @${channel}`)
             return
           }
           if ('error' in body && body['error']['status'] === 401 && typeof message !== 'undefined' && message === 'The access token expired') {
-            getAccessToken()
+            updateAccessToken()
             onMessageHandler(target, context, msg, self)
             return
           }
@@ -264,7 +251,7 @@ function twitchUsername (error, response, body) {
 
           const song = body['tracks']['items'][0]
           let artists = ''
-          for (const artist in song.artists) if (song.artists.hasOwnProperty(artist)) artists += song.artists[artist].name + ', '
+          for (const artist of song['artists']) artists += artist['name'] + ', '
           artists = artists.replace(/, $/g, '')
 
           songRequestQueue.push({ [song['id']]: 'spotify' })
@@ -305,7 +292,7 @@ function twitchUsername (error, response, body) {
           return
         }
         refreshToken = data
-        getAccessToken()
+        updateAccessToken()
         update()
       }
     }
@@ -314,7 +301,7 @@ function twitchUsername (error, response, body) {
     const client_id = secrets['spotify']['id'] // Your client id
     const client_secret = secrets['spotify']['secret'] // Your secret
 
-    function getAccessToken () {
+    function updateAccessToken () {
       request.post({
         url: 'https://accounts.spotify.com/api/token',
         form: {
@@ -324,13 +311,9 @@ function twitchUsername (error, response, body) {
           refresh_token: refreshToken
         },
         json: true
-      }, tokenResponse)
+      }).then(tokenResponse).catch(console.error)
 
-      function tokenResponse (error, response, body) {
-        if (error) {
-          console.error(error)
-          return
-        }
+      function tokenResponse (body) {
         accessToken = body['access_token']
       }
     }
@@ -342,15 +325,16 @@ function twitchUsername (error, response, body) {
           Authorization: `Bearer ${accessToken}`
         },
         json: true
-      }, currentlyPlaying)
+      }).then(currentlyPlaying).catch(currentlyPlayingError)
 
-      function currentlyPlaying (error, response, body) {
-        if (error) {
-          console.log(error)
-          updateFunction()
-          return
-        }
+      function currentlyPlayingError (error) {
+        const realError = error['error']['error']
+        if (realError['status'] === 401 && realError['message'] === 'Invalid access token') updateAccessToken()
+        else console.error(error)
+        updateFunction()
+      }
 
+      function currentlyPlaying (body) {
         if (body === undefined || body['progress_ms'] === 0 && !body['isplaying'])
           playing['spotify'] = false
         else if (!playing['spotify'])
@@ -370,14 +354,9 @@ function twitchUsername (error, response, body) {
                 headers: {
                   Authorization: `Bearer ${accessToken}`
                 }
-              }, spotifyDevices)
+              }).then(spotifyDevices).catch(console.error)
 
-            function spotifyDevices (error, response, body) {
-              if (error) {
-                console.error(error)
-                return
-              }
-
+            function spotifyDevices (body) {
               request.put({
                 url: `https://api.spotify.com/v1/me/player/play?device_id=${JSON.parse(body)['devices'][0]['id']}`,
                 headers: {
@@ -392,8 +371,8 @@ function twitchUsername (error, response, body) {
                 json: true
               }, spotifyPlayResponse)
 
-              function spotifyPlayResponse (error1) {
-                if (error1) console.error(error1)
+              function spotifyPlayResponse (error) {
+                if (error) console.error(error)
               }
             }
 
@@ -441,13 +420,9 @@ function twitchUsername (error, response, body) {
         case 'youtube':
           request.get({
             url: `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${songRequest['song']}&key=${secrets['youtube']['key']}`
-          }, youtubeVideoMetadata)
+          }).then(youtubeVideoMetadata).catch(console.error)
 
-        function youtubeVideoMetadata (error, response, body) {
-          if (error) {
-            console.error(error)
-            return
-          }
+        function youtubeVideoMetadata (body) {
 
           const snippet = JSON.parse(body)['items'][0]['snippet']
           songRequest['name'] = snippet['title']
@@ -511,14 +486,13 @@ function twitchUsername (error, response, body) {
         // your application requests refresh and access tokens
         // after checking the state parameter
 
-        const code = req.query.code || null
-        const state = req.query.state || null
+        const code = req['query']['code'] || null
+        const state = req['query']['state'] || null
 
-        if (state === null) {
-          res.redirect(`/#${querystring.stringify({
-            error: 'state_mismatch'
-          })}`)
-        } else {
+        if (state === null) res.redirect(`/#${querystring.stringify({
+          error: 'state_mismatch'
+        })}`)
+        else {
           request.post({
             url: 'https://accounts.spotify.com/api/token',
             form: {
@@ -530,13 +504,9 @@ function twitchUsername (error, response, body) {
               Authorization: `Basic ${new Buffer(`${client_id}:${client_secret}`).toString('base64')}`
             },
             json: true
-          }, authTokenResponse)
+          }).then(authTokenResponse).catch(console.error)
 
-          function authTokenResponse (error, response, body) {
-            if (error) {
-              console.error(error)
-              return
-            }
+          function authTokenResponse (body) {
             if (response['statusCode'] === 200) {
               refreshToken = body['refresh_token']
               fs.writeFile(refreshTokenFile, refreshToken, writeRefreshTokenToFileResponse)
@@ -545,7 +515,7 @@ function twitchUsername (error, response, body) {
                 if (err) console.error(err)
               }
 
-              getAccessToken()
+              updateAccessToken()
               update()
             } else {
               res.redirect(`/#${querystring.stringify({
@@ -573,10 +543,9 @@ function twitchUsername (error, response, body) {
             refresh_token: refresh_token
           },
           json: true
-        }, refreshTokenGotResponse)
+        }).then(refreshTokenGotResponse).catch(console.error)
 
-        function refreshTokenGotResponse (error, response, body) {
-          if (!(!error && response.statusCode === 200)) return
+        function refreshTokenGotResponse (body) {
           const access_token = body['access_token']
           res.send({ access_token })
         }
@@ -584,8 +553,13 @@ function twitchUsername (error, response, body) {
 
       app.listen(8888)
     }
+  } catch (e) {
+    console.error(e)
   }
 }
+
+// noinspection JSIgnoredPromiseFromCall
+main()
 
 ipcMain.on('done', youtubeVideoDone)
 

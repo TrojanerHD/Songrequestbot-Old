@@ -1,8 +1,6 @@
 const { app, BrowserWindow } = require('electron')
 
-module.exports = {
-  createElectronInstance
-}
+module.exports = createElectronInstance
 
 function createElectronInstance () {
   let win
