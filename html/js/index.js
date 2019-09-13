@@ -16,7 +16,7 @@ function refresh () {
 async function update () {
   // noinspection InfiniteLoopJS
   while (true) {
-    console.log(playing)
+    if (ipcRenderer.sendSync('skip')) player.seekTo(player.getDuration())
     if (playing === false) await refresh()
     await sleep(1000)
   }
@@ -40,7 +40,7 @@ function onYouTubePlayerAPIReady () {
 // autoplay video
 function onPlayerReady (event) {
   update()
-  event.target.playVideo()
+  event['target'].playVideo()
   started = true
 }
 

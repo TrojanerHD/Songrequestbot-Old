@@ -18,6 +18,7 @@ const playing = { 'spotify': false, 'youtube': false }
 const electron = require(`${__dirname}/electron`)
 electron()
 let nextSong = undefined
+let youtubeSkip = false
 
 // Twitch Stuff
 async function twitchLogin () {
@@ -101,14 +102,15 @@ async function main () {
 
       const cmd = msg.split(' ')[0].toLowerCase()
 
-      if (cmd === 'skip') {
-        request.get({
-          headers: {
-            'Client-ID': secrets['twitch']['client-id']
-          },
-          url: `https://api.twitch.tv/helix/streams?user_login=${channel}`,
-          json: true
-        }).then(checkViewersForSkip).catch(console.error)
+      switch (cmd) {
+        case 'skip':
+          request.get({
+            headers: {
+              'Client-ID': secrets['twitch']['client-id']
+            },
+            url: `https://api.twitch.tv/helix/streams?user_login=${channel}`,
+            json: true
+          }).then(checkViewersForSkip).catch(console.error)
 
         function checkViewersForSkip (body) {
           if (body['data']['length'] === 0) {
@@ -120,15 +122,21 @@ async function main () {
           viewersWhoWantToSkipTheTrack.push(context['username'])
           if (viewers * 25 / 100 > viewersWhoWantToSkipTheTrack['length']) {
             if (context['username'] in viewersWhoWantToSkipTheTrack) {
-              client.say(channel, `You already want to skip that track. To skip it, 25% of the viewers are needed to skip it. [${viewersWhoWantToSkipTheTrack['length']}]`)
+              client.say(channel, `You already want to skip that track. To skip it, at least 25% of the viewers have to type in !skip. [${viewersWhoWantToSkipTheTrack['length']}]`)
               return
             }
             client.say(channel, `If 25% of the viewers want to skip then the track will be skipped. [${viewersWhoWantToSkipTheTrack['length']}]`)
             return
           }
 
-          if (accessToken === undefined) {
-            client.say(channel, `Something went wrong... maybe the Spotify-API is not running? @${channel}`)
+          if (playing['youtube']) {
+            client.say(channel, 'Alright, the song was skipped.')
+            youtubeSkip = true
+            return
+          }
+
+          if (!playing['spotify']) {
+            client.say(channel, 'Nothing is playing right now!')
             return
           }
           // if 25% of viewers said skip
@@ -145,9 +153,55 @@ async function main () {
           }
 
           function skipSpotify () {
-            client.say(channel, `Alright, the song was skipped. [${viewersWhoWantToSkipTheTrack['length']}]`)
+            client.say(channel, 'Alright, the song was skipped.')
           }
         }
+
+          return
+        case 'forceskip':
+          request.get({
+            url: `http://tmi.twitch.tv/group/user/${channel}/chatters`,
+            json: true
+          }).then(twitchChatters).catch(console.error)
+
+        function twitchChatters (body) {
+          let isMod = false
+          for (const user of body['chatters']['moderators'])
+            if (context['username'] === user) isMod = true
+          for (const user of body['chatters']['broadcaster'])
+            if (context['username'] === user) isMod = true
+          if (isMod) {
+            if (playing['youtube']) {
+              client.say(channel, 'Alright, the song was skipped.')
+              youtubeSkip = true
+              return
+            }
+            if (!playing['spotify']) {
+              client.say(channel, 'Nothing is playing right now!')
+              return
+            }
+            request.post({
+              url: 'https://api.spotify.com/v1/me/player/next',
+              headers: {
+                Authorization: `Bearer ${accessToken}`
+              }
+            }).then(skipSpotify).catch(skipSpotifyError)
+
+            function skipSpotifyError (error) {
+              client.say(channel, 'Something went wrong... :/')
+              console.error(error)
+            }
+
+            function skipSpotify () {
+              client.say(channel, 'Alright, the song was skipped.')
+            }
+
+            return
+          }
+          client.say(channel, 'You are neither a moderator nor the streamer itself. Thus, you are not allowed to forceskip the track!')
+        }
+
+          return
       }
       for (const command of info['commands']['songrequest']) {
         if (cmd !== command) continue
@@ -329,7 +383,7 @@ async function main () {
 
       function currentlyPlayingError (error) {
         const realError = error['error']['error']
-        if (realError['status'] === 401 && realError['message'] === 'Invalid access token') updateAccessToken()
+        if (realError !== undefined && realError['status'] === 401 && realError['message'] === 'Invalid access token') updateAccessToken()
         else console.error(error)
         updateFunction()
       }
@@ -573,4 +627,11 @@ ipcMain.on('refresh', onYoutubePlayerRefresh)
 function onYoutubePlayerRefresh (event) {
   event['returnValue'] = nextSong
   nextSong = undefined
+}
+
+ipcMain.on('skip', youtubeSkipRequest)
+
+function youtubeSkipRequest (event) {
+  event['returnValue'] = youtubeSkip
+  youtubeSkip = false
 }
