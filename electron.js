@@ -1,4 +1,8 @@
 const { app, BrowserWindow } = require('electron')
+const { autoUpdater } = require('electron-updater')
+
+// noinspection JSIgnoredPromiseFromCall
+autoUpdater.checkForUpdatesAndNotify()
 
 module.exports = createElectronInstance
 
