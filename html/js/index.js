@@ -1,4 +1,5 @@
 const { ipcRenderer } = require('electron')
+const $ = require('jquery')
 let playing = false
 // create youtube player
 let player
@@ -16,9 +17,35 @@ function refresh () {
 async function update () {
   // noinspection InfiniteLoopJS
   while (true) {
-    if (ipcRenderer.sendSync('skip')) player.seekTo(player.getDuration())
+    const skipAndQueue = ipcRenderer.sendSync('skip-and-queue')
+    if (skipAndQueue['skip']) player.seekTo(player.getDuration())
+    updateQueue(skipAndQueue['queue'])
     if (playing === false) await refresh()
     await sleep(1000)
+  }
+}
+
+function updateQueue (queue) {
+  $('div.queue').html('<table>\n' +
+    '        <tbody>\n' +
+    '        <tr>\n' +
+    '            <th>Song Name</th>\n' +
+    '            <th>Artist(s)</th>\n' +
+    '            <th>URL</th>\n' +
+    '            <th>Requested by</th>\n' +
+    '            <th>Action</th>\n' +
+    '        </tr>\n' +
+    '        </tbody>\n' +
+    '    </table>')
+  queue.reverse()
+  for (const index of queue) {
+    $(`<tr><td class="title">${index['title']}</td><td class="artists">${index['artists']}</td><td class="url"><a href="${index['url']}">${index['url']}</a></td><td>${index['requester']}</td><td class="trash"><i class="fas fa-trash-alt"></i></td></tr>`).insertAfter('div.queue > table > tbody')
+  }
+  $('td.trash').on('click', deleteSongRequest)
+
+  function deleteSongRequest () {
+    const url = $(this).parent().find('td.url > a').html()
+    ipcRenderer.send('delete', url)
   }
 }
 

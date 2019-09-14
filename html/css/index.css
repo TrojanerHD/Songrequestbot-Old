@@ -1,4 +1,23 @@
 body {
     background-color: #121212;
     color: lightgray;
+    font-family: 'Roboto', sans-serif;
+}
+
+div.queue {
+    float: right;
+}
+
+th, td {
+    border: 1px solid #6b6b6b;
+    padding: 10px;
+    text-align: center;
+}
+
+div.queue > table {
+    border-collapse: collapse;
+}
+
+a {
+    color: #3557ff;
 }

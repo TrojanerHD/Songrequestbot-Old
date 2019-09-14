@@ -1,6 +1,6 @@
 const tmi = require('tmi.js')
 const express = require('express') // Express web server framework
-const request = require('request-promise') // "Request" library
+const request = require('request-promise') // "Request" libraries
 const cors = require('cors')
 const querystring = require('querystring')
 const cookieParser = require('cookie-parser')
@@ -215,7 +215,30 @@ async function main () {
         allArgs = allArgs.replace(/ $/g, '')
 
         if (allArgs.match(/^http(s|):\/\/open\.spotify\.com\/track\/.*/g)) {
-          songRequestQueue.push({ [allArgs.split('/')[allArgs.split('/')['length'] - 1].split('?')[0]]: 'spotify' })
+          const id = allArgs.split('/')[allArgs.split('/')['length'] - 1].split('?')[0]
+          request.get({
+            url: `https://api.spotify.com/v1/tracks/${id}`,
+            json: true,
+            headers: {
+              Authorization: `Bearer ${accessToken}`
+            }
+          }).then(spotifyTitle).catch(console.error)
+
+          function spotifyTitle (body) {
+            let artists = ''
+            for (const artist of body['artists']) artists += artist['name'] + ', '
+            artists = artists.replace(/, $/g, '')
+
+            songRequestQueue.push({
+              platform: 'spotify',
+              title: body['name'],
+              artists,
+              url: allArgs,
+              id,
+              requester: context['display-name']
+            })
+          }
+
           addTrack(channel, {
             song: allArgs.split('/')[allArgs.split('/')['length'] - 1].split('?')[0],
             platform: 'spotify',
@@ -224,34 +247,48 @@ async function main () {
           return
         }
 
-        if (allArgs.match(/^http(s|):\/\/(www.|)youtube.com\/watch\?v=.*/)) {
-          const id = allArgs.split(/[?&]v=/)[1].split('&')[0]
-          if (id.match(/[?&]/)) {
-            client.say(target, 'This does not look like a correct youtube link')
-            return
-          }
-          songRequestQueue.push({ [id]: 'youtube' })
-          addTrack(channel, {
-            song: id,
-            platform: 'youtube',
-            url: `https://youtu.be/${id}`
-          })
+        if (allArgs.match(/^(http(s|):\/\/|)(www.|)youtube.com\/watch\?v=.*/)) {
+          addYouTubeVideo(allArgs.split(/[?&]v=/)[1].split('&')[0])
           return
         }
 
-        if (allArgs.match(/^http(s|):\/\/youtu.be\/.*/g)) {
-          const id = allArgs.split('/')[allArgs.split('/')['length'] - 1].split('?')[0]
+        if (allArgs.match(/^(http(s|):\/\/|)youtu.be\/.*/g)) {
+          addYouTubeVideo(allArgs.split('/')[allArgs.split('/')['length'] - 1].split('?')[0])
+          return
+        }
+
+        function addYouTubeVideo (id) {
           if (id.match(/[?&]/)) {
             client.say(target, 'This does not look like a correct youtube link')
             return
           }
-          songRequestQueue.push({ [id]: 'youtube' })
-          addTrack(channel, {
-            song: id,
-            platform: 'youtube',
-            url: allArgs
-          })
-          return
+          request.get({
+            url: `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${id}&key=${secrets['youtube']['key']}`,
+            headers: {
+              Accept: 'application/json'
+            },
+            json: true
+          }).then(youtubeTitle).catch(console.error)
+
+          function youtubeTitle (body) {
+            const snippet = body['items'][0]['snippet']
+            const url = `https://youtu.be/${id}`
+            songRequestQueue.push({
+              platform: 'youtube',
+              title: snippet['title'],
+              artists: snippet['channelTitle'],
+              url,
+              id,
+              requester: context['display-name']
+            })
+            addTrack(channel, {
+              song: id,
+              platform: 'youtube',
+              url,
+              name: snippet['title'],
+              artists: snippet['channelTitle']
+            })
+          }
         }
 
         request.get({
@@ -290,11 +327,19 @@ async function main () {
                 client.say(channel, 'There were no matches. Try it again with other search parameters or create a request with the direct link of that song from Spotify/YouTube.')
                 return
               }
-              songRequestQueue.push({ [`https://yout.be/${results[0]['id']}`]: 'youtube' })
+              const url = `https://youtu.be/${results[0]['id']}`
+              songRequestQueue.push({
+                platform: 'youtube',
+                title: results[0]['title'],
+                artists: results[0]['channelTitle'],
+                url,
+                id: `https://yout.be/${results[0]['id']}`,
+                requester: context['display-name']
+              })
               addTrack(channel, {
                 platform: 'youtube',
                 artists: results[0]['channelTitle'],
-                url: `https://youtu.be/${results[0]['id']}`,
+                url,
                 name: results[0]['title'],
                 song: results[0]['id']
               })
@@ -308,12 +353,21 @@ async function main () {
           for (const artist of song['artists']) artists += artist['name'] + ', '
           artists = artists.replace(/, $/g, '')
 
-          songRequestQueue.push({ [song['id']]: 'spotify' })
+          const url = song['external_urls']['spotify']
+
+          songRequestQueue.push({
+            platform: 'spotify',
+            title: song['name'],
+            artists,
+            url,
+            id: song['id'],
+            requester: context['display-name']
+          })
           addTrack(channel, {
             song: song['id'],
             platform: 'spotify',
             artists,
-            url: song['external_urls']['spotify'],
+            url,
             name: song['name']
           })
         }
@@ -395,14 +449,14 @@ async function main () {
           playing['spotify'] = true
 
         if (!playing['spotify'] && !playing['youtube'] && songRequestQueue['length'] !== 0) {
-          switch (Object.values(songRequestQueue[0])[0]) {
+          switch (songRequestQueue[0]['platform']) {
             case 'youtube':
-              nextSong = Object.keys(songRequestQueue[0])[0]
+              nextSong = songRequestQueue[0]['id']
               playing['youtube'] = true
               songRequestQueue.shift()
               break
             case 'spotify':
-              const nextSongSpotify = Object.keys(songRequestQueue[0])[0]
+              const nextSongSpotify = songRequestQueue[0]['id']
               request.get({
                 url: 'https://api.spotify.com/v1/me/player/devices',
                 headers: {
@@ -423,7 +477,7 @@ async function main () {
                   position_ms: 0
                 },
                 json: true
-              }, spotifyPlayResponse)
+              }).then(spotifyPlayResponse).catch(console.error)
 
               function spotifyPlayResponse (error) {
                 if (error) console.error(error)
@@ -470,25 +524,7 @@ async function main () {
       // artists,
       // url,
       // name
-      switch (songRequest['platform']) {
-        case 'youtube':
-          request.get({
-            url: `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${songRequest['song']}&key=${secrets['youtube']['key']}`
-          }).then(youtubeVideoMetadata).catch(console.error)
-
-        function youtubeVideoMetadata (body) {
-
-          const snippet = JSON.parse(body)['items'][0]['snippet']
-          songRequest['name'] = snippet['title']
-          songRequest['artists'] = snippet['channelTitle']
-          client.say(channel, `${songRequest['name'].replace(/^([!\/.])/, '')} by ${songRequest['artists']} is in the queue on place ${songRequestQueue['length']} | ${songRequest['url']}`)
-        }
-
-          break
-        case 'spotify':
-          client.say(channel, `${songRequest['name'] !== undefined && songRequest['artists'] !== undefined ? `${songRequest['name']} by ${songRequest['artists']}` : 'Your song'} is in the queue on place ${songRequestQueue['length']} | ${songRequest['url']}`)
-          break
-      }
+      client.say(channel, `${songRequest['name'].replace(/^([!\/.])/, '') !== undefined && songRequest['artists'] !== undefined ? `${songRequest['name'].replace(/^([!\/.])/, '')} by ${songRequest['artists']}` : 'Your song'} is in the queue on place ${songRequestQueue['length']} | ${songRequest['url']}`)
     }
 
     function startServer () {
@@ -629,9 +665,19 @@ function onYoutubePlayerRefresh (event) {
   nextSong = undefined
 }
 
-ipcMain.on('skip', youtubeSkipRequest)
+ipcMain.on('skip-and-queue', youtubeSkipRequest)
 
 function youtubeSkipRequest (event) {
-  event['returnValue'] = youtubeSkip
+  event['returnValue'] = { skip: youtubeSkip, queue: songRequestQueue }
   youtubeSkip = false
+}
+
+ipcMain.on('delete', deleteSongRequest)
+
+function deleteSongRequest (event, args) {
+  let counter = 0
+  for (const index of songRequestQueue) {
+    if (index['url'] === args) songRequestQueue.splice(counter, 1)
+    counter++
+  }
 }
