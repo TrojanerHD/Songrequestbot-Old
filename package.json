@@ -2,7 +2,7 @@
   "name": "songrequestbot-twitch",
   "version": "0.0.1",
   "description": "A songrequestbot for Twitch providing YouTube and Spotify",
-  "main": "index.js",
+  "main": "./index.js",
   "scripts": {
     "debug": "node index.js",
     "pack": "electron-builder --dir",

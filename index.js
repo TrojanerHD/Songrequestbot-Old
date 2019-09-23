@@ -237,13 +237,15 @@ async function main () {
               id,
               requester: context['display-name']
             })
+            addTrack(channel, {
+              song: allArgs.split('/')[allArgs.split('/')['length'] - 1].split('?')[0],
+              platform: 'spotify',
+              url: allArgs,
+              name: body['name'],
+              artists
+            })
           }
 
-          addTrack(channel, {
-            song: allArgs.split('/')[allArgs.split('/')['length'] - 1].split('?')[0],
-            platform: 'spotify',
-            url: allArgs
-          })
           return
         }
 
@@ -437,13 +439,13 @@ async function main () {
 
       function currentlyPlayingError (error) {
         const realError = error['error']['error']
-        if (realError !== undefined && realError['status'] === 401 && realError['message'] === 'Invalid access token') updateAccessToken()
+        if (realError !== undefined && realError['status'] === 401 && (realError['message'] === 'Invalid access token' || realError['message'] === 'The access token expired')) updateAccessToken()
         else console.error(error)
         updateFunction()
       }
 
       function currentlyPlaying (body) {
-        if (body === undefined || body['progress_ms'] === 0 && !body['isplaying'])
+        if (body === undefined || (body['progress_ms'] === 0 && !body['isplaying']))
           playing['spotify'] = false
         else if (!playing['spotify'])
           playing['spotify'] = true
@@ -474,19 +476,16 @@ async function main () {
                   uris: [
                     `spotify:track:${nextSongSpotify}`
                   ],
-                  position_ms: 0
+                  position_ms: 1
                 },
                 json: true
-              }).then(spotifyPlayResponse).catch(console.error)
-
-              function spotifyPlayResponse (error) {
-                if (error) console.error(error)
-              }
+              }).catch(console.error)
             }
 
               songRequestQueue.shift()
               playing['spotify'] = true
-              break
+              updateFunction()
+              return
           }
         }
 
@@ -515,7 +514,7 @@ async function main () {
     }
 
     function updateFunction () {
-      setTimeout(update, 2000)
+      setTimeout(update, 4500)
     }
 
     function addTrack (channel, songRequest) {
