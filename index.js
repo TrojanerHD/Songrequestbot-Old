@@ -5,7 +5,7 @@ const cors = require('cors')
 const querystring = require('querystring')
 const cookieParser = require('cookie-parser')
 const search = require('youtube-search')
-const { ipcMain } = require('electron')
+const { ipcMain, ipcRenderer } = require('electron')
 const path = require('path')
 const current = {}
 let accessToken = undefined
@@ -13,15 +13,17 @@ let refreshToken = undefined
 let viewersWhoWantToSkipTheTrack = []
 const fs = require('fs')
 const currentDir = __dirname.match(/app\.asar/) ? path.dirname(path.dirname(path.dirname(__filename)).replace('app.asar', '')) : __dirname
-const secrets = require(`./secrets`)
+const secrets = require(`${__dirname}/secrets`)
 const songRequestQueue = []
 const info = require(`${currentDir}/info`)
 const playing = { 'spotify': false, 'youtube': false }
+const spotify = require(`${__dirname}/spotify`)
 const electron = require(`${__dirname}/electron`)
 electron()
 let nextSong = undefined
 let youtubeSkip = false
 let scheduledAlertMessage = []
+let client = undefined
 
 // Twitch Stuff
 async function twitchLogin () {
@@ -71,7 +73,7 @@ async function main () {
     }
 
 // Create a client with our options
-    const client = new tmi.client(twtchOpts)
+    client = new tmi.client(twtchOpts)
 
 // Register our event handlers (defined below)
     client.on('connected', onConnectedHandler)
@@ -209,7 +211,7 @@ async function main () {
       for (const command of info['commands']['songrequest']) {
         if (cmd !== command) continue
         if (args['length'] === 0) {
-          client.say(channel, 'You have to specify the name/url of the track (!sr <query>)')
+          client.say(channel, `You have to specify the name/url of the track (!${info['commands']['songrequest'][0]} <query>)`)
           return
         }
 
@@ -218,37 +220,7 @@ async function main () {
         allArgs = allArgs.replace(/ $/g, '')
 
         if (allArgs.match(/^http(s|):\/\/open\.spotify\.com\/track\/.*/g)) {
-          const id = allArgs.split('/')[allArgs.split('/')['length'] - 1].split('?')[0]
-          request.get({
-            url: `https://api.spotify.com/v1/tracks/${id}`,
-            json: true,
-            headers: {
-              Authorization: `Bearer ${accessToken}`
-            }
-          }).then(spotifyTitle).catch(console.error)
-
-          function spotifyTitle (body) {
-            let artists = ''
-            for (const artist of body['artists']) artists += artist['name'] + ', '
-            artists = artists.replace(/, $/g, '')
-
-            songRequestQueue.push({
-              platform: 'spotify',
-              title: body['name'],
-              artists,
-              url: allArgs,
-              id,
-              requester: context['display-name']
-            })
-            addTrack(channel, {
-              song: allArgs.split('/')[allArgs.split('/')['length'] - 1].split('?')[0],
-              platform: 'spotify',
-              url: allArgs,
-              name: body['name'],
-              artists
-            })
-          }
-
+          spotify.getUrl(allArgs, channel, context)
           return
         }
 
@@ -428,6 +400,7 @@ async function main () {
 
       function tokenResponse (body) {
         accessToken = body['access_token']
+        spotify.setAccessToken(accessToken)
       }
     }
 
@@ -520,15 +493,6 @@ async function main () {
       setTimeout(update, 4500)
     }
 
-    function addTrack (channel, songRequest) {
-      // song,
-      // platform: 'spotify' | 'youtube',
-      // artists,
-      // url,
-      // name
-      client.say(channel, `${songRequest['name'].replace(/^([!\/.])/, '') !== undefined && songRequest['artists'] !== undefined ? `${songRequest['name'].replace(/^([!\/.])/, '')} by ${songRequest['artists']}` : 'Your song'} is in the queue on place ${songRequestQueue['length']} | ${songRequest['url']}`)
-    }
-
     function startServer () {
       console.log('Listening on 8888')
 
@@ -619,6 +583,7 @@ async function main () {
             res.send('Success! You may now close this tab and you are able to use the Songrequestbot now.')
 
             accessToken = body['access_token']
+            spotify.setAccessToken(accessToken)
             update()
           }
         }
@@ -693,4 +658,46 @@ function deleteSongRequest (event, args) {
     if (index['url'] === args) songRequestQueue.splice(counter, 1)
     counter++
   }
+}
+
+function spotifyListener () {
+  const spotifyData = spotify.refresh()
+  if (spotifyData['spotifySong'] !== undefined) {
+    const { spotifySong, allArgs, channel, id, context } = spotifyData['spotifySong']
+    let artists = ''
+    for (const artist of spotifySong['artists']) artists += artist['name'] + ', '
+    artists = artists.replace(/, $/g, '')
+    songRequestQueue.push({
+      platform: 'spotify',
+      title: spotifySong['name'],
+      artists,
+      url: allArgs,
+      id,
+      requester: context['display-name']
+    })
+    addTrack(channel, {
+      song: allArgs.split('/')[allArgs.split('/')['length'] - 1].split('?')[0],
+      platform: 'spotify',
+      url: allArgs,
+      name: spotifySong['name'],
+      artists
+    })
+    spotify.setSpotifySong(undefined)
+  }
+  spotifyListenerLoop()
+}
+
+spotifyListener()
+
+function spotifyListenerLoop () {
+  setTimeout(spotifyListener, 2000)
+}
+
+function addTrack (channel, songRequest) {
+  // song,
+  // platform: 'spotify' | 'youtube',
+  // artists,
+  // url,
+  // name
+  client.say(channel, `${songRequest['name'].replace(/^([!\/.])/, '') !== undefined && songRequest['artists'] !== undefined ? `${songRequest['name'].replace(/^([!\/.])/, '')} by ${songRequest['artists']}` : 'Your song'} is in the queue on place ${songRequestQueue['length']} | ${songRequest['url']}`)
 }
