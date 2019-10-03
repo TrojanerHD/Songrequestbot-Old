@@ -5,7 +5,7 @@ Plays music using Spotify or YouTube, requested from Twitch chat.
 These instructions will show you how to install and use the bot.
 
 ### Installing / Using
-First, download the .exe on the [releases-page](releases). Double-click it and follow the installer instructions. In this version, you have to create a [info.json](README.md#infojson). Optionally, start Spotify either in a browser or the application.
+First, download the .exe on the [releases-page](https://github.com/TrojanerHD/Songrequestbot/releases). Double-click it and follow the installer instructions. In this version, you have to create a [info.json](#infojson). Optionally, start Spotify either in a browser or the application.
 
 Now you can execute the program using the exe inside the installation folder and should see a window with a YouTube player which will play YouTube videos and the Spotify player is also used to play Spotify songs after you have logged in as the alert will tell you.
 
@@ -14,7 +14,7 @@ Note: For now, there is no installer for Linux and macOS and you will have to de
 #### Prerequisites
 + [Node.js](https://nodejs.org)
 #### Setup
-+ Go to the [releases-page](releases), download the newest release as a `.zip`-file and unpack it in an empty folder.
++ Go to the [releases-page](https://github.com/TrojanerHD/Songrequestbot/releases), download the newest release as a `.zip`-file and unpack it in an empty folder.
 + Then you will have to manually install the node_modules:
   ```BAT
   cd "path/to/the/folder/where/you/unpacked/the/zip"
@@ -89,7 +89,7 @@ We use [SemVer](http://semver.org/) for versioning. For the versions available, 
 ## Authors
 * **Trojaner** - *Initial work* - [TrojanerHD](https://github.com/TrojanerHD)
 
-See also the list of [contributors](contributors) who participated in this project.
+See also the list of [contributors](https://github.com/TrojanerHD/Songrequestbot/contributors) who participated in this project.
 
 ## Additional Notes
 In a future update it is planned that you can run the application without having to log in to Spotify. If you do not, links from Spotify will be not accepted and the bot will only use YouTube for search queries.
