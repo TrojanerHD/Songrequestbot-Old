@@ -4,11 +4,17 @@ Plays music using Spotify or YouTube, requested from Twitch chat.
 ## Getting Started
 These instructions will show you how to install and use the bot.
 
-### Prerequisites
-+ [Node.js](https://nodejs.org)
+### Installing / Using
+First, download the .exe on the [releases-page](releases). Double-click it and follow the installer instructions. In this version, you have to create a [info.json](README.md#infojson). Optionally, start Spotify either in a browser or the application.
 
-### Installing
-+ Go to the [releases-page](https://github.com/TrojanerHD/Songrequestbot/releases), download the newest release as a `.zip`-file and unpack it in an empty folder.
+Now you can execute the program using the exe inside the installation folder and should see a window with a YouTube player which will play YouTube videos and the Spotify player is also used to play Spotify songs after you have logged in as the alert will tell you.
+
+### Deployment / Installing on Unix-based-systems
+Note: For now, there is no installer for Linux and macOS and you will have to deploy the bot. You may test it with [wine](https://www.winehq.org/) but this is not explicitly supported and may not work at all or lead to bugs
+#### Prerequisites
++ [Node.js](https://nodejs.org)
+#### Setup
++ Go to the [releases-page](releases), download the newest release as a `.zip`-file and unpack it in an empty folder.
 + Then you will have to manually install the node_modules:
   ```BAT
   cd "path/to/the/folder/where/you/unpacked/the/zip"
@@ -16,8 +22,8 @@ These instructions will show you how to install and use the bot.
   ```
 
 You have to create two files inside the folder where you unpacked the zip.
-+ `info.json`
-    ```json
+##### info.json
+```json
   {
       "twitch": {
         "username": "YOUR_TWITCH_USERNAME"
@@ -28,9 +34,10 @@ You have to create two files inside the folder where you unpacked the zip.
         ]
       }
   }
-    ```
-    Note: The `songrequest` array is used to determine which commands will be recognized as song request commands. For example you could insert `"sr"` there.
-+ `secrets.json`
+```
+Note: The `songrequest` array is used to determine which commands will be recognized as song request commands. For example you could insert `"sr"` there.
+
+##### secrets.json
   ```json
    {
      "spotify": {
@@ -46,7 +53,7 @@ You have to create two files inside the folder where you unpacked the zip.
      }
    }
   ```
-  For now, the bot needs some secrets. In the final version, those secrets will not be needed anymore but now they are necessary.
+  Now you will have to create some applications:
   1. [Create a Spotify application](https://developer.spotify.com/documentation/general/guides/app-settings/)
   2. Create a Twitch application:  
     Head to your [Twitch application dashboard](https://dev.twitch.tv/console/apps) and click on `Register Your Application`. The name can be whatever you want (I would recommend `songrequestbot`) and as OAuth Redirect URL enter the value you get from the [Twitch Chat Password Generator](https://twitchapps.com/tmi/). Afterward, select `Chat Bot` as category and click on create. Enter the OAuth Redirect URL in the json at `PASSWORD_OF_APPLICATION` and the Client ID as `CLIENT_ID_OF_APPLICATION`
@@ -56,9 +63,7 @@ You have to create two files inside the folder where you unpacked the zip.
      3. At the top of the page, select the OAuth consent screen tab. Select an Email address, enter a Product name if not already set, and click the Save button.
      4. Select the Credentials tab, click the Create credentials button and select API key.
      5. Copy the API key and paste it into the json file at `YOUTUBE_KEY`
-### Using
-First, start Spotify either in a browser or the application. (optional)
-
+     
 Since the program is currently in alpha, you have to run the program via the command prompt.
 + Windows:
   ```BAT
@@ -70,10 +75,6 @@ Since the program is currently in alpha, you have to run the program via the com
   cd "path/to/the/folder/where/you/unpacked/the/zip"
   node_modules/.bin/electron index.js
   ```
-When you start the program for the first time, it will demand you in the command prompt window to head to a specific website and log in with your Spotify account. This is necessary to search for songs and play songs on Spotify  
-
-Now you should see a window with a YouTube player which will play songs.
-
 ## Built With
 * [Node.js](https://nodejs.org) - Server side JavaScript
 * [Electron](https://electronjs.org/) - The front-end (UI)
@@ -88,7 +89,7 @@ We use [SemVer](http://semver.org/) for versioning. For the versions available, 
 ## Authors
 * **Trojaner** - *Initial work* - [TrojanerHD](https://github.com/TrojanerHD)
 
-See also the list of [contributors](https://github.com/TrojanerHD/Songrequestbot/contributors) who participated in this project.
+See also the list of [contributors](contributors) who participated in this project.
 
 ## Additional Notes
 In a future update it is planned that you can run the application without having to log in to Spotify. If you do not, links from Spotify will be not accepted and the bot will only use YouTube for search queries.
