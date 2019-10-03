@@ -24,7 +24,11 @@
   },
   "build": {
     "productName": "Songrequestbot",
-    "appId": "com.electron.songrequestbot"
+    "appId": "com.electron.songrequestbot",
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   },
   "devDependencies": {
     "electron": "^6.0.4",
