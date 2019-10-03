@@ -1,6 +1,6 @@
 {
   "name": "songrequestbot-twitch",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "A songrequestbot for Twitch providing YouTube and Spotify",
   "main": "./index.js",
   "scripts": {
@@ -24,7 +24,11 @@
   },
   "build": {
     "productName": "Songrequestbot",
-    "appId": "com.electron.songrequestbot"
+    "appId": "com.electron.songrequestbot",
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   },
   "devDependencies": {
     "electron": "^6.0.4",

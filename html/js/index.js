@@ -7,7 +7,10 @@ let started = false
 let currentlyPlaying
 
 function refresh () {
-  const song = ipcRenderer.sendSync('refresh')
+  const data = ipcRenderer.sendSync('refresh')
+  const song = data['song']
+  const alertMessage = data['alert']
+  if (alertMessage != null) alert(alertMessage)
   if (song === undefined || song === null) return
   playing = true
   const urlSplit = song.split('/')
