@@ -6,19 +6,22 @@ const querystring = require('querystring')
 const cookieParser = require('cookie-parser')
 const search = require('youtube-search')
 const { ipcMain } = require('electron')
+const path = require('path')
 const current = {}
 let accessToken = undefined
 let refreshToken = undefined
 let viewersWhoWantToSkipTheTrack = []
 const fs = require('fs')
-const secrets = require(`${__dirname}/secrets`)
+const currentDir = __dirname.match(/app\.asar/) ? path.dirname(path.dirname(path.dirname(__filename)).replace('app.asar', '')) : __dirname
+const secrets = require(`./secrets`)
 const songRequestQueue = []
-const info = require(`${__dirname}/info`)
+const info = require(`${currentDir}/info`)
 const playing = { 'spotify': false, 'youtube': false }
 const electron = require(`${__dirname}/electron`)
 electron()
 let nextSong = undefined
 let youtubeSkip = false
+let scheduledAlertMessage = []
 
 // Twitch Stuff
 async function twitchLogin () {
@@ -376,7 +379,7 @@ async function main () {
       }
     }
 
-    const refreshTokenFile = 'refresh_token.txt'
+    const refreshTokenFile = `${currentDir}/refresh_token.txt`
     const authMessage = 'Please head to http://localhost:8888/login and log in to activate the bot.'
     if (!fs.existsSync(refreshTokenFile)) {
       fs.writeFile(refreshTokenFile, '', createRefreshTokenFile)
@@ -385,7 +388,7 @@ async function main () {
         if (err) console.error(err)
       }
 
-      console.log(authMessage)
+      scheduledAlertMessage.push(authMessage)
       startServer()
     } else {
       fs.readFile(refreshTokenFile, 'utf8', readRefreshTokenFile)
@@ -397,7 +400,7 @@ async function main () {
           return
         }
         if (data.match(/^$/g)) {
-          console.log(authMessage)
+          scheduledAlertMessage.push(authMessage)
           startServer()
           return
         }
@@ -562,10 +565,10 @@ async function main () {
         // your application requests authorization
         res.redirect(`https://accounts.spotify.com/authorize?${querystring.stringify({
           response_type: 'code',
-          client_id: client_id,
+          client_id,
           scope: scopes,
-          redirect_uri: redirect_uri,
-          state: state
+          redirect_uri,
+          state
         })}`)
       }
 
@@ -593,24 +596,30 @@ async function main () {
               Authorization: `Basic ${new Buffer(`${client_id}:${client_secret}`).toString('base64')}`
             },
             json: true
-          }).then(authTokenResponse).catch(console.error)
+          }).then(authTokenResponse).catch(authTokenError)
 
-          function authTokenResponse (body) {
-            if (response['statusCode'] === 200) {
-              refreshToken = body['refresh_token']
-              fs.writeFile(refreshTokenFile, refreshToken, writeRefreshTokenToFileResponse)
-
-              function writeRefreshTokenToFileResponse (err) {
-                if (err) console.error(err)
-              }
-
-              updateAccessToken()
-              update()
-            } else {
+          function authTokenError (error) {
+            if (error['error'] === 'invalid_grant') {
               res.redirect(`/#${querystring.stringify({
                 error: 'invalid_token'
               })}`)
+              return
             }
+            console.error(`${error} in index.js on line 598`)
+          }
+
+          function authTokenResponse (body) {
+            refreshToken = body['refresh_token']
+            fs.writeFile(refreshTokenFile, refreshToken, writeRefreshTokenToFileResponse)
+
+            function writeRefreshTokenToFileResponse (err) {
+              if (err) console.error(err)
+            }
+
+            res.send('Success! You may now close this tab and you are able to use the Songrequestbot now.')
+
+            accessToken = body['access_token']
+            update()
           }
         }
       }
@@ -660,7 +669,12 @@ function youtubeVideoDone () {
 ipcMain.on('refresh', onYoutubePlayerRefresh)
 
 function onYoutubePlayerRefresh (event) {
-  event['returnValue'] = nextSong
+  const alertScheduled = scheduledAlertMessage['length'] >= 1
+  event['returnValue'] = {
+    song: nextSong,
+    alert: alertScheduled ? scheduledAlertMessage[0] : null
+  }
+  if (alertScheduled) scheduledAlertMessage.shift()
   nextSong = undefined
 }
 
