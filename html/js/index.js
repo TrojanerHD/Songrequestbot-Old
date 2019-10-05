@@ -1,5 +1,6 @@
 const { ipcRenderer } = require('electron')
 const $ = require('jquery')
+
 let playing = false
 // create youtube player
 let player
@@ -83,14 +84,15 @@ function onPlayerStateChange (event) {
     url: `https://youtu.be/${videoData['video_id']}`
   }
 
+
   switch (event['data']) {
     case -1:
       if (!playing || !started) return
       ipcRenderer.send('video-unavailable', videoArgs)
+      ipcRenderer.send('now-playing', videoArgs)
       alert('Dismiss this alert when you finished playing the video by hand')
       playing = false
       ipcRenderer.send('done')
-      console.log(event['data'])
       break
     case 0:
       playing = false
@@ -101,6 +103,7 @@ function onPlayerStateChange (event) {
       if (currentlyPlaying === videoData['video_id']) break
       currentlyPlaying = videoData['video_id']
       ipcRenderer.send('now-playing', videoArgs)
+      playing = true
       break
   }
 }
