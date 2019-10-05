@@ -1,11 +1,12 @@
 const request = require('request-promise')
 let accessToken = false
-let spotifySong = undefined
+let response = undefined
 module.exports = {
   getUrl,
   setAccessToken,
   refresh,
-  setSpotifySong
+  setResponse,
+  searchForSong
 }
 
 function getUrl (allArgs, channel, context) {
@@ -20,12 +21,12 @@ function getUrl (allArgs, channel, context) {
   }).then(spotifyTitle).catch(console.error)
 
   function spotifyTitle (body) {
-    spotifySong = {
+    response = {
       spotifySong: body,
-      allArgs,
       channel,
       id,
-      context
+      context,
+      url: allArgs.split('?')[0]
     }
   }
 }
@@ -35,11 +36,60 @@ function setAccessToken (newAccessToken) {
 }
 
 function refresh () {
-  return {
-    spotifySong
-  }
+  return response
 }
 
-function setSpotifySong (newSong) {
-  spotifySong = newSong
+function setResponse (newResponse) {
+  response = newResponse
+}
+
+function searchForSong (allArgs, channel, target, context, msg, self) {
+  if (!accessToken) return
+  request.get({
+    url: `https://api.spotify.com/v1/search?q=${encodeURIComponent(allArgs)}&type=track&limit=1`,
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    },
+    json: true
+  }).then(playInitializer).catch(console.error)
+
+  function playInitializer (body) {
+    if ('error' in body && body['error']['status'] === 401 && typeof message !== 'undefined' && message === 'The access token expired') {
+      response = {
+        error: {
+          reason: 'update-access-token',
+          target,
+          context,
+          self,
+          msg
+        }
+      }
+      return
+    }
+
+    if (!body['tracks'] || !body['tracks']['items'][0]) {
+      response = {
+        error: {
+          reason: 'no-results',
+          allArgs,
+          context,
+          channel
+        }
+      }
+      return
+    }
+
+    const song = body['tracks']['items'][0]
+
+    response = {
+      spotifySong: {
+        artists: song['artists'],
+        name: song['name']
+      },
+      channel,
+      id: song['id'],
+      context,
+      url: song['external_urls']['spotify']
+    }
+  }
 }

@@ -5,9 +5,9 @@ Plays music using Spotify or YouTube, requested from Twitch chat.
 These instructions will show you how to install and use the bot.
 
 ### Installing / Using
-First, download the .exe on the [releases-page](https://github.com/TrojanerHD/Songrequestbot/releases). Double-click it and follow the installer instructions. In this version, you have to create a [info.json](#infojson). Optionally, start Spotify either in a browser or the application.
+First, download the .exe on the [releases-page](https://github.com/TrojanerHD/Songrequestbot/releases). Double-click it and follow the installer instructions. In this version, you will have to create a [settings.json](#settingsjson). Optionally, start Spotify either in a browser or the application.
 
-Now you can execute the program using the exe inside the installation folder and should see a window with a YouTube player which will play YouTube videos and the Spotify player is also used to play Spotify songs after you have logged in as the alert will tell you.
+Now you can execute the program using the exe inside the installation folder and should see a window with a YouTube player which will play YouTube videos and the Spotify player is used to play Spotify songs after you have logged in as the alert will tell you.
 
 ### Deployment / Installing on Unix-based-systems
 Note: For now, there is no installer for Linux and macOS and you will have to deploy the bot. You may test it with [wine](https://www.winehq.org/) but this is not explicitly supported and may not work at all or lead to bugs
@@ -22,7 +22,7 @@ Note: For now, there is no installer for Linux and macOS and you will have to de
   ```
 
 You have to create two files inside the folder where you unpacked the zip.
-##### info.json
+##### settings.json
 ```json
   {
       "twitch": {
@@ -32,11 +32,19 @@ You have to create two files inside the folder where you unpacked the zip.
         "songrequest": [
 
         ]
-      }
+      },
+      "disabled": {
+        "services": [
+          
+        ]
+      },
+      "reduced-debugging": false
   }
 ```
-Note: The `songrequest` array is used to determine which commands will be recognized as song request commands. For example you could insert `"sr"` there.
-
+Notes:
++ The `songrequest` array is used to determine which commands will be recognized as song request commands. For example you could insert `"sr"` there.
++ The `disabled` object is currently being used to disable services. Inside the services you can either insert `"spotify"` or `"youtube"`
++ The `reduced-debugging` boolean is being used to control whether the bot should write complete messages with detailed info or only [error codes]()
 ##### secrets.json
   ```json
    {
@@ -75,6 +83,9 @@ Since the program is currently in alpha, you have to run the program via the com
   cd "path/to/the/folder/where/you/unpacked/the/zip"
   node_modules/.bin/electron index.js
   ```
+  
+## Error Codes
++ Error code 1: The song could not be played due to restrictions. Please open the following link in a browser in order to play the song and afterward dismiss the alert in the electron window
 ## Built With
 * [Node.js](https://nodejs.org) - Server side JavaScript
 * [Electron](https://electronjs.org/) - The front-end (UI)
