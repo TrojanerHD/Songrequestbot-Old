@@ -44,7 +44,7 @@ You have to create two files inside the folder where you unpacked the zip.
 Notes:
 + The `songrequest` array is used to determine which commands will be recognized as song request commands. For example you could insert `"sr"` there.
 + The `disabled` object is currently being used to disable services. Inside the services you can either insert `"spotify"` or `"youtube"`
-+ The `reduced-debugging` boolean is being used to control whether the bot should write complete messages with detailed info or only [error codes]()
++ The `reduced-debugging` boolean is being used to control whether the bot should write complete messages with detailed info or only [error codes](#error-codes)
 ##### secrets.json
   ```json
    {
