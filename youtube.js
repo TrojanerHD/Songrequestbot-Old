@@ -1,4 +1,4 @@
-const search = require('youtube-search')
+const request = require('request-promise')
 let response = undefined
 module.exports = {
   searchForSong,
@@ -7,29 +7,45 @@ module.exports = {
 }
 
 function searchForSong (allArgs, secrets, context, channel) {
-  search(allArgs, {
-    maxResults: 1,
-    key: secrets['youtube']['key'],
-    type: 'video'
-  }, searchResults)
+  request.get({
+    url: `https://www.googleapis.com/youtube/v3/search?q=${allArgs}&part=snippet&key=${secrets['youtube']['key']}&type=video&videoEmbeddable=true`,
+    headers: {
+      Accept: 'application/json'
+    },
+    json: true
+  }).then(searchResults).catch(console.error)
 
-  function searchResults (err, results) {
-    if (err) {
-      console.error(err)
-      return
-    }
+  function searchResults (body) {
+    const id = body['items'][0]['id']['videoId']
+    request.get({
+      url: `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${id}&key=${secrets['youtube']['key']}`,
+      headers: {
+        Accept: 'application/json'
+      },
+      json: true
+    }).then(youtubeTitle).catch(console.error)
 
-    if (results['length'] === 0) {
-      response = {
-        error: {
-          reason: 'no-match',
-          channel
+    function youtubeTitle (body) {
+      if (body['items']['length'] === 0) {
+        response = {
+          error: {
+            reason: 'no-match',
+            channel
+          }
         }
+        return
       }
-      return
+      const url = `https://youtu.be/${id}`
+      const snippet = body['items'][0]['snippet']
+      response = {
+        url,
+        context,
+        channel,
+        snippet,
+        id
+      }
+
     }
-    const url = `https://youtu.be/${results[0]['id']}`
-    response = { results, url, context, channel }
 
   }
 }

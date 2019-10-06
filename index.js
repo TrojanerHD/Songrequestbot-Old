@@ -44,6 +44,10 @@ function onMessageHandler (target, context, msg, self) {
 
   switch (cmd) {
     case 'skip':
+      if (viewersWhoWantToSkipTheTrack.includes(context['username'])) {
+        client.say(channel, `You already want to skip that track. To skip it, at least 25% of the viewers have to type in !skip. [${viewersWhoWantToSkipTheTrack['length']}]`)
+        return
+      }
       request.get({
         headers: {
           'Client-ID': secrets['twitch']['client-id']
@@ -60,10 +64,6 @@ function onMessageHandler (target, context, msg, self) {
       const viewers = body['data'][0]['viewer_count']
 
       if (viewers * 25 / 100 > viewersWhoWantToSkipTheTrack['length']) {
-        if (context['username'] in viewersWhoWantToSkipTheTrack) {
-          client.say(channel, `You already want to skip that track. To skip it, at least 25% of the viewers have to type in !skip. [${viewersWhoWantToSkipTheTrack['length']}]`)
-          return
-        }
         viewersWhoWantToSkipTheTrack.push(context['username'])
         client.say(channel, `If 25% of the viewers want to skip then the track will be skipped. [${viewersWhoWantToSkipTheTrack['length']}]`)
         return
@@ -72,6 +72,7 @@ function onMessageHandler (target, context, msg, self) {
       if (playing['youtube']) {
         client.say(channel, 'Alright, the song was skipped.')
         youtubeSkip = true
+        viewersWhoWantToSkipTheTrack = []
         return
       }
 
@@ -93,6 +94,7 @@ function onMessageHandler (target, context, msg, self) {
       }
 
       function skipSpotify () {
+        viewersWhoWantToSkipTheTrack = []
         client.say(channel, 'Alright, the song was skipped.')
       }
     }
@@ -332,7 +334,7 @@ async function main () {
       }).then(currentlyPlaying).catch(currentlyPlayingError)
 
       function currentlyPlayingError (error) {
-        const realError = error['error']['error']
+        const realError = 'error' in error && 'error' in error['error'] ? error['error']['error'] : undefined
         if (realError !== undefined && realError['status'] === 401 && (realError['message'] === 'Invalid access token' || realError['message'] === 'The access token expired')) updateAccessToken()
         else console.error(error)
         updateFunction()
@@ -644,21 +646,21 @@ function youtubeListener () {
       youtubeListenerLoop()
       return
     }
-    const { results, url, context, channel } = song
+    const { url, context, channel, id, snippet } = song
     songRequestQueue.push({
       platform: 'youtube',
-      title: results[0]['title'],
-      artists: results[0]['channelTitle'],
+      title: snippet['title'],
+      artists: snippet['channelTitle'],
       url,
-      id: `https://yout.be/${results[0]['id']}`,
+      id: `https://yout.be/${id}`,
       requester: context['display-name']
     })
     addTrack(channel, {
       platform: 'youtube',
-      artists: results[0]['channelTitle'],
+      artists: snippet['channelTitle'],
       url,
-      name: results[0]['title'],
-      song: results[0]['id']
+      name: snippet['title'],
+      song: id
     })
     youtube.setResponse(undefined)
   }

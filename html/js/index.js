@@ -4,11 +4,11 @@ const $ = require('jquery')
 let playing = false
 // create youtube player
 let player
-let started = false
 let currentlyPlaying
 
 function refresh () {
   const data = ipcRenderer.sendSync('refresh')
+  console.log(data)
   const song = data['song']
   const alertMessage = data['alert']
   if (alertMessage != null) alert(alertMessage)
@@ -24,7 +24,7 @@ async function update () {
     const skipAndQueue = ipcRenderer.sendSync('skip-and-queue')
     if (skipAndQueue['skip']) player.seekTo(player.getDuration())
     updateQueue(skipAndQueue['queue'])
-    if (playing === false) await refresh()
+    if (!playing) await refresh()
     await sleep(1000)
   }
 }
@@ -42,9 +42,7 @@ function updateQueue (queue) {
     '        </tbody>\n' +
     '    </table>')
   queue.reverse()
-  for (const index of queue) {
-    $(`<tr><td class="title">${index['title']}</td><td class="artists">${index['artists']}</td><td class="url"><a href="${index['url']}">${index['url']}</a></td><td>${index['requester']}</td><td class="trash"><i class="fas fa-trash-alt"></i></td></tr>`).insertAfter('div.queue > table > tbody')
-  }
+  for (const index of queue) $(`<tr><td class="title">${index['title']}</td><td class="artists">${index['artists']}</td><td class="url"><a href="${index['url']}">${index['url']}</a></td><td>${index['requester']}</td><td class="trash"><i class="fas fa-trash-alt"></i></td></tr>`).insertAfter('div.queue > table > tbody')
   $('td.trash').on('click', deleteSongRequest)
 
   function deleteSongRequest () {
@@ -72,7 +70,6 @@ function onYouTubePlayerAPIReady () {
 function onPlayerReady (event) {
   update()
   event['target'].playVideo()
-  started = true
 }
 
 // when video ends
@@ -84,19 +81,17 @@ function onPlayerStateChange (event) {
     url: `https://youtu.be/${videoData['video_id']}`
   }
 
-
   switch (event['data']) {
     case -1:
-      if (!playing || !started) return
+      if (!playing) return
       ipcRenderer.send('video-unavailable', videoArgs)
-      ipcRenderer.send('now-playing', videoArgs)
       alert('Dismiss this alert when you finished playing the video by hand')
       playing = false
       ipcRenderer.send('done')
+      console.log(event['data'])
       break
     case 0:
       playing = false
-      started = false
       ipcRenderer.send('done')
       break
     case 1:
