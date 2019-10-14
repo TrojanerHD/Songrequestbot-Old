@@ -8,7 +8,6 @@ let currentlyPlaying
 
 function refresh () {
   const data = ipcRenderer.sendSync('refresh')
-  console.log(data)
   const song = data['song']
   const alertMessage = data['alert']
   if (alertMessage != null) alert(alertMessage)
@@ -88,7 +87,6 @@ function onPlayerStateChange (event) {
       alert('Dismiss this alert when you finished playing the video by hand')
       playing = false
       ipcRenderer.send('done')
-      console.log(event['data'])
       break
     case 0:
       playing = false
