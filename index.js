@@ -32,6 +32,10 @@ if ('disabled' in settings && 'services' in settings['disabled'] && !settings['d
   enabledServices.push('youtube')
 if ('disabled' in settings && 'services' in settings['disabled'] && !settings['disabled']['services'].includes('spotify'))
   enabledServices.push('spotify')
+if (!('commands' in settings)) settings['commands'] = {}
+
+const allCommands = ['skip', 'forceskip', 'songrequest', 'wrongsong']
+for (const command of allCommands) if (!(command in settings['commands'])) settings['commands'][command] = [command]
 
 function onMessageHandler (target, context, msg, self) {
   if (self) return
@@ -43,23 +47,25 @@ function onMessageHandler (target, context, msg, self) {
 
   const cmd = msg.split(' ')[0].toLowerCase()
 
-  switch (cmd) {
-    case 'skip':
-      if (currentSong['requester'] === context['display-name']) {
-        skipSong(channel, 'skipped')
-        return
-      }
-      if (viewersWhoWantToSkipTheTrack.includes(context['username'])) {
-        client.say(channel, `You already want to skip that track. To skip it, at least 25% of the viewers have to type in !skip. [${viewersWhoWantToSkipTheTrack['length']}]`)
-        return
-      }
-      request.get({
-        headers: {
-          'Client-ID': secrets['twitch']['client-id']
-        },
-        url: `https://api.twitch.tv/helix/streams?user_login=${channel}`,
-        json: true
-      }).then(checkViewersForSkip).catch(console.error)
+  if (settings['commands']['skip'].includes(cmd)) {
+    if (currentSong['requester'] === context['display-name']) {
+      skipSong(channel, 'skipped')
+      return
+    }
+    const skipNumber = 'properties' in settings && 'skip' in settings['properties'] && 'viewers' in settings['properties']['skip'] && settings['properties']['skip']['viewers'] ? settings['properties']['skip']['viewers'] : '25%'
+    const percent = skipNumber.endsWith('%')
+
+    if (viewersWhoWantToSkipTheTrack.includes(context['username'])) {
+      client.say(channel, `You already want to skip that track. To skip it, at least ${percent ? `${skipNumber} of the` : skipNumber} viewers have to type in !skip. [${viewersWhoWantToSkipTheTrack['length']}]`)
+      return
+    }
+    request.get({
+      headers: {
+        'Client-ID': secrets['twitch']['client-id']
+      },
+      url: `https://api.twitch.tv/helix/streams?user_login=${channel}`,
+      json: true
+    }).then(checkViewersForSkip).catch(console.error)
 
     function checkViewersForSkip (body) {
       if (body['data']['length'] === 0) {
@@ -68,20 +74,21 @@ function onMessageHandler (target, context, msg, self) {
       }
       const viewers = body['data'][0]['viewer_count']
 
-      if (viewers * 25 / 100 > viewersWhoWantToSkipTheTrack['length']) {
+      if ((percent && viewers * parseInt(skipNumber.replace(/%$/, '')) / 100 > viewersWhoWantToSkipTheTrack['length']) || (!percent && viewersWhoWantToSkipTheTrack['length'] < skipNumber)) {
         viewersWhoWantToSkipTheTrack.push(context['username'])
-        client.say(channel, `If 25% of the viewers want to skip then the track will be skipped. [${viewersWhoWantToSkipTheTrack['length']}]`)
+        client.say(channel, `If ${percent ? `${skipNumber} of the` : skipNumber} viewers want to skip then the track will be skipped. [${viewersWhoWantToSkipTheTrack['length']}]`)
         return
       }
       skipSong(channel, 'skipped')
     }
 
-      return
-    case 'forceskip':
-      request.get({
-        url: `http://tmi.twitch.tv/group/user/${channel}/chatters`,
-        json: true
-      }).then(twitchChatters).catch(console.error)
+    return
+  }
+  if (settings['commands']['forceskip'].includes(cmd)) {
+    request.get({
+      url: `http://tmi.twitch.tv/group/user/${channel}/chatters`,
+      json: true
+    }).then(twitchChatters).catch(console.error)
 
     function twitchChatters (body) {
       let isMod = false
@@ -120,24 +127,25 @@ function onMessageHandler (target, context, msg, self) {
       client.say(channel, 'You are neither a moderator nor the streamer itself. Thus, you are not allowed to forceskip the track!')
     }
 
-      return
-    case 'wrongsong':
-      const requester = context['display-name']
-      songRequestQueue.reverse()
-      let count = 0
-      for (const request of songRequestQueue) {
-        if (request['requester'] === requester) {
-          songRequestQueue.splice(count, 1)
-          client.say(channel, `Your requested song ${request['title']} by ${request['artists']} was successfully removed from the queue`)
-          songRequestQueue = songRequestQueue.reverse()
-          return
-        }
-        count++
+    return
+  }
+  if (settings['commands']['wrongsong'].includes(cmd)) {
+    const requester = context['display-name']
+    songRequestQueue.reverse()
+    let count = 0
+    for (const request of songRequestQueue) {
+      if (request['requester'] === requester) {
+        songRequestQueue.splice(count, 1)
+        client.say(channel, `Your requested song ${request['title']} by ${request['artists']} was successfully removed from the queue`)
+        songRequestQueue = songRequestQueue.reverse()
+        return
       }
-      songRequestQueue.reverse()
-      if (currentSong['requester'] === requester) skipSong(channel, 'removed')
-      else client.say(channel, 'You cannot do that since there is no song request from you')
-      return
+      count++
+    }
+    songRequestQueue.reverse()
+    if (currentSong['requester'] === requester) skipSong(channel, 'removed')
+    else client.say(channel, 'You cannot do that since there is no song request from you')
+    return
   }
   if (settings['commands']['songrequest'].includes(cmd)) {
     if (args['length'] === 0) {
