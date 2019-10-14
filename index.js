@@ -13,7 +13,7 @@ let viewersWhoWantToSkipTheTrack = []
 const fs = require('fs')
 const currentDir = __dirname.match(/app\.asar/) ? path.dirname(path.dirname(path.dirname(__filename)).replace('app.asar', '')) : __dirname
 const secrets = require(`${__dirname}/secrets`)
-const songRequestQueue = []
+let songRequestQueue = []
 const settings = require(`${currentDir}/settings`)
 const playing = { 'spotify': false, 'youtube': false }
 const spotify = require(`${__dirname}/spotify`)
@@ -27,6 +27,7 @@ let client = undefined
 const client_id = secrets['spotify']['id'] // Your client id
 const client_secret = secrets['spotify']['secret'] // Your secret
 const enabledServices = []
+let currentSong = {}
 if ('disabled' in settings && 'services' in settings['disabled'] && !settings['disabled']['services'].includes('youtube'))
   enabledServices.push('youtube')
 if ('disabled' in settings && 'services' in settings['disabled'] && !settings['disabled']['services'].includes('spotify'))
@@ -44,6 +45,10 @@ function onMessageHandler (target, context, msg, self) {
 
   switch (cmd) {
     case 'skip':
+      if (currentSong['requester'] === context['display-name']) {
+        skipSong(channel, 'skipped')
+        return
+      }
       if (viewersWhoWantToSkipTheTrack.includes(context['username'])) {
         client.say(channel, `You already want to skip that track. To skip it, at least 25% of the viewers have to type in !skip. [${viewersWhoWantToSkipTheTrack['length']}]`)
         return
@@ -68,35 +73,7 @@ function onMessageHandler (target, context, msg, self) {
         client.say(channel, `If 25% of the viewers want to skip then the track will be skipped. [${viewersWhoWantToSkipTheTrack['length']}]`)
         return
       }
-
-      if (playing['youtube']) {
-        client.say(channel, 'Alright, the song was skipped.')
-        youtubeSkip = true
-        viewersWhoWantToSkipTheTrack = []
-        return
-      }
-
-      if (!playing['spotify']) {
-        client.say(channel, 'Nothing is playing right now!')
-        return
-      }
-      // if 25% of viewers said skip
-      request.post({
-        url: 'https://api.spotify.com/v1/me/player/next',
-        headers: {
-          Authorization: `Bearer ${accessToken}`
-        }
-      }).then(skipSpotify).catch(skipSpotifyError)
-
-      function skipSpotifyError (error) {
-        client.say(channel, 'Something went wrong... :/')
-        console.error(error)
-      }
-
-      function skipSpotify () {
-        viewersWhoWantToSkipTheTrack = []
-        client.say(channel, 'Alright, the song was skipped.')
-      }
+      skipSong(channel, 'skipped')
     }
 
       return
@@ -143,6 +120,23 @@ function onMessageHandler (target, context, msg, self) {
       client.say(channel, 'You are neither a moderator nor the streamer itself. Thus, you are not allowed to forceskip the track!')
     }
 
+      return
+    case 'wrongsong':
+      const requester = context['display-name']
+      songRequestQueue.reverse()
+      let count = 0
+      for (const request of songRequestQueue) {
+        if (request['requester'] === requester) {
+          songRequestQueue.splice(count, 1)
+          client.say(channel, `Your requested song ${request['title']} by ${request['artists']} was successfully removed from the queue`)
+          songRequestQueue = songRequestQueue.reverse()
+          return
+        }
+        count++
+      }
+      songRequestQueue.reverse()
+      if (currentSong['requester'] === requester) skipSong(channel, 'removed')
+      else client.say(channel, 'You cannot do that since there is no song request from you')
       return
   }
   if (settings['commands']['songrequest'].includes(cmd)) {
@@ -350,6 +344,7 @@ async function main () {
           switch (songRequestQueue[0]['platform']) {
             case 'youtube':
               nextSong = songRequestQueue[0]['id']
+              currentSong = { requester: songRequestQueue[0]['requester'] }
               playing['youtube'] = true
               songRequestQueue.shift()
               break
@@ -378,6 +373,7 @@ async function main () {
               }).catch(console.error)
             }
 
+              currentSong = { requester: songRequestQueue[0]['requester'] }
               songRequestQueue.shift()
               playing['spotify'] = true
               updateFunction()
@@ -697,5 +693,36 @@ function updateAccessToken () {
   function tokenResponse (body) {
     accessToken = body['access_token']
     spotify.setAccessToken(accessToken)
+  }
+}
+
+function skipSong (channel, context) {
+  if (playing['youtube']) {
+    client.say(channel, `Alright, the song was ${context}.`)
+    youtubeSkip = true
+    viewersWhoWantToSkipTheTrack = []
+    return
+  }
+
+  if (!playing['spotify']) {
+    client.say(channel, 'Nothing is playing right now!')
+    return
+  }
+  // if 25% of viewers said skip
+  request.post({
+    url: 'https://api.spotify.com/v1/me/player/next',
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    }
+  }).then(skipSpotify).catch(skipSpotifyError)
+
+  function skipSpotifyError (error) {
+    client.say(channel, 'Something went wrong... :/')
+    console.error(error)
+  }
+
+  function skipSpotify () {
+    viewersWhoWantToSkipTheTrack = []
+    client.say(channel, `Alright, the song was ${context}.`)
   }
 }

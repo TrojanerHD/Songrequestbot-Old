@@ -16,6 +16,13 @@ function searchForSong (allArgs, secrets, context, channel) {
   }).then(searchResults).catch(console.error)
 
   function searchResults (body) {
+    if (!('items' in body) || body['items']['length'] === 0)
+      response = {
+        error: {
+          reason: 'no-match',
+          channel
+        }
+      }
     const id = body['items'][0]['id']['videoId']
     request.get({
       url: `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${id}&key=${secrets['youtube']['key']}`,
