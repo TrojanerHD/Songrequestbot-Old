@@ -39,6 +39,7 @@ if (!('twitch' in settings) || !('username' in settings['twitch'])) scheduledAle
 
 if (!('limitations' in settings)) settings['limitations'] = {}
 if (!('length' in settings['limitations'])) settings['limitations']['length'] = 0
+if (!('requests' in settings['limitations'])) settings['limitations']['requests'] = 0
 
 const allCommands = ['skip', 'forceskip', 'songrequest', 'wrongsong']
 for (const command of allCommands) if (!(command in settings['commands'])) settings['commands'][command] = [command]
@@ -157,6 +158,13 @@ function onMessageHandler (target, context, msg, self) {
   if (settings['commands']['songrequest'].includes(cmd)) {
     if (args['length'] === 0) {
       client.say(channel, `You have to specify the name/url of the track (!${settings['commands']['songrequest'][0]} <query>)`)
+      return
+    }
+    const songRequestsByUser = []
+    for (const request of songRequestQueue) if (request['requester'] === context['display-name']) songRequestsByUser.push(request)
+    const requestLimitations = settings['limitations']['requests']
+    if (requestLimitations > 0 && songRequestsByUser['length'] >= requestLimitations) {
+      client.say(channel, `You have already requested a maximum of ${requestLimitations} songs`)
       return
     }
 

@@ -44,7 +44,8 @@ Location: [home](https://en.wikipedia.org/wiki/Home_directory#Default_home_direc
     }
   },
   "limitations": {
-    "length": 0
+    "length": 0,
+    "requests": 0
   },
   "reduced-debugging": false
 }
@@ -62,6 +63,7 @@ Notes:
 + The `reduced-debugging` boolean is being used to control whether the bot should write complete messages with detailed info or only [error codes](#error-codes).
 + In `properties -> skip -> viewers` you can define how many viewers will have to type in `!skip` (by default) in order to skip the song. You can either type `NUMBER` (absolute value, example: `12`) or `NUMBER%` (relative value, example: `12%`). If you do not provide this setting, the default (`25%`) will be used.
 + `limitations -> length` determines how long (in minutes) a track can be. If no value is provided or the value is `0`, the track's length is unlimited.
++ `limitations -> requests` determines how many songs of a viewer can be in the queue at the same time
 ##### secrets.json
 Location: The folder where you unpacked the zip
   ```json
