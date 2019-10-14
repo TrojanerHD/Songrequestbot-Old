@@ -343,7 +343,9 @@ async function main () {
       }
 
       function currentlyPlaying (body) {
-        if (body === undefined || (body['progress_ms'] === 0 && !body['isplaying']))
+        if (body !== undefined) currentSong['progress_ms'] = body['progress_ms']
+
+        if (!('progress_ms' in currentSong) || currentSong['progress_ms'] === 0)
           playing['spotify'] = false
         else if (!playing['spotify'])
           playing['spotify'] = true
