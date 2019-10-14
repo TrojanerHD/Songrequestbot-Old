@@ -21,8 +21,9 @@ Note: For now, there is no installer for Linux and macOS and you will have to de
   npm install
   ```
 
-You have to create two files inside the folder where you unpacked the zip.
+Now you have to create two files.
 ##### settings.json
+Location: [home](https://en.wikipedia.org/wiki/Home_directory#Default_home_directory_per_operating_system) /Songrequestbot/settings.json
 ```json
 {
   "twitch": {
@@ -58,6 +59,7 @@ Notes:
 + The `reduced-debugging` boolean is being used to control whether the bot should write complete messages with detailed info or only [error codes](#error-codes)
 + In `properties -> skip -> viewers` you can define how many viewers will have to type in `!skip` (by default) in order to skip the song. You can either type `NUMBER` (absolute value, example: `12`) or `NUMBER%` (relative value, example: `12%`). If you do not provide this setting, the default (`25%`) will be used.
 ##### secrets.json
+Location: The folder where you unpacked the zip
   ```json
    {
      "spotify": {

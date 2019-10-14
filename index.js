@@ -14,7 +14,9 @@ const fs = require('fs')
 const currentDir = __dirname.match(/app\.asar/) ? path.dirname(path.dirname(path.dirname(__filename)).replace('app.asar', '')) : __dirname
 const secrets = require(`${__dirname}/secrets`)
 let songRequestQueue = []
-const settings = require(`${currentDir}/settings`)
+const settingsSetup = require(`${__dirname}/settings.js`)
+settingsSetup.initialize()
+const settings = require(settingsSetup.getSettingsPath())
 const playing = { 'spotify': false, 'youtube': false }
 const spotify = require(`${__dirname}/spotify`)
 const electron = require(`${__dirname}/electron`)
@@ -33,6 +35,7 @@ if ('disabled' in settings && 'services' in settings['disabled'] && !settings['d
 if ('disabled' in settings && 'services' in settings['disabled'] && !settings['disabled']['services'].includes('spotify'))
   enabledServices.push('spotify')
 if (!('commands' in settings)) settings['commands'] = {}
+if (!('twitch' in settings) || !('username' in settings['twitch'])) scheduledAlertMessage.push(`You must provide your username under ${settingsSetup.getSettingsPath()}: \n{\n  "twitch": {\n    "username": "USERNAME"\n  }\n}\nThen restart the bot`)
 
 const allCommands = ['skip', 'forceskip', 'songrequest', 'wrongsong']
 for (const command of allCommands) if (!(command in settings['commands'])) settings['commands'][command] = [command]
