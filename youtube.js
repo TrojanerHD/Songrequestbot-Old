@@ -44,12 +44,19 @@ function searchForSong (allArgs, secrets, context, channel) {
       }
       const url = `https://youtu.be/${id}`
       const snippet = body['items'][0]['snippet']
+      let duration = body['items'][0]['contentDetails']['duration'].replace(/^PT/, '')
+      let hours = 0
+      if (duration.match('H')) {
+        hours = duration.split('H')[0]
+        duration = duration.split('H')[1]
+      }
       response = {
         url,
         context,
         channel,
         snippet,
-        id
+        id,
+        minutes: duration.match('M') ? parseInt(duration.split('M')[0]) + hours * 60 : hours * 60
       }
 
     }

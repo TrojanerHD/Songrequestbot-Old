@@ -43,6 +43,9 @@ Location: [home](https://en.wikipedia.org/wiki/Home_directory#Default_home_direc
       "viewers": "25%"
     }
   },
+  "limitations": {
+    "length": LENGTH
+  },
   "reduced-debugging": false
 }
 ```
@@ -55,9 +58,10 @@ Notes:
     ]
     ```
     The keys for the commands are `songrequest`, `forceskip`, `skip` and `wrongsong`; if you do not provide a command in the settings, those keys will be used as default triggers. If the array is empty, the command will be disabled.
-+ The `disabled` object is currently being used to disable services. Inside the services you can either insert `"spotify"` or `"youtube"`
-+ The `reduced-debugging` boolean is being used to control whether the bot should write complete messages with detailed info or only [error codes](#error-codes)
++ The `disabled` object is currently being used to disable services. Inside the services you can either insert `"spotify"` or `"youtube"`.
++ The `reduced-debugging` boolean is being used to control whether the bot should write complete messages with detailed info or only [error codes](#error-codes).
 + In `properties -> skip -> viewers` you can define how many viewers will have to type in `!skip` (by default) in order to skip the song. You can either type `NUMBER` (absolute value, example: `12`) or `NUMBER%` (relative value, example: `12%`). If you do not provide this setting, the default (`25%`) will be used.
++ `limitations -> length` determines how long (in minutes) a track can be. If no value is provided or the value is `0`, the track's length is unlimited.
 ##### secrets.json
 Location: The folder where you unpacked the zip
   ```json

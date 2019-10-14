@@ -21,6 +21,7 @@ function getUrl (allArgs, channel, context) {
   }).then(spotifyTitle).catch(console.error)
 
   function spotifyTitle (body) {
+    body['minutes'] = Math.floor(body['duration_ms'] / 60000)
     response = {
       spotifySong: body,
       channel,
@@ -84,7 +85,8 @@ function searchForSong (allArgs, channel, target, context, msg, self) {
     response = {
       spotifySong: {
         artists: song['artists'],
-        name: song['name']
+        name: song['name'],
+        minutes: Math.floor(song['duration_ms'] / 60000)
       },
       channel,
       id: song['id'],

@@ -37,6 +37,9 @@ if ('disabled' in settings && 'services' in settings['disabled'] && !settings['d
 if (!('commands' in settings)) settings['commands'] = {}
 if (!('twitch' in settings) || !('username' in settings['twitch'])) scheduledAlertMessage.push(`You must provide your username under ${settingsSetup.getSettingsPath()}: \n{\n  "twitch": {\n    "username": "USERNAME"\n  }\n}\nThen restart the bot`)
 
+if (!('limitations' in settings)) settings['limitations'] = {}
+if (!('length' in settings['limitations'])) settings['limitations']['length'] = 0
+
 const allCommands = ['skip', 'forceskip', 'songrequest', 'wrongsong']
 for (const command of allCommands) if (!(command in settings['commands'])) settings['commands'][command] = [command]
 
@@ -188,7 +191,7 @@ function onMessageHandler (target, context, msg, self) {
       if (!checkId(id, channel)) return
 
       request.get({
-        url: `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${id}&key=${secrets['youtube']['key']}`,
+        url: `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${id}&key=${secrets['youtube']['key']}`,
         headers: {
           Accept: 'application/json'
         },
@@ -196,6 +199,14 @@ function onMessageHandler (target, context, msg, self) {
       }).then(youtubeTitle).catch(console.error)
 
       function youtubeTitle (body) {
+        let duration = body['items'][0]['contentDetails']['duration'].replace(/^PT/, '')
+        let hours = 0
+        if (duration.match('H')) {
+          hours = duration.split('H')[0]
+          duration = duration.split('H')[1]
+        }
+        const minutes = duration.match('M') ? parseInt(duration.split('M')[0]) + hours * 60 : hours * 60
+        if (!checkDuration(minutes, channel)) return
         const snippet = body['items'][0]['snippet']
         const url = `https://youtu.be/${id}`
         songRequestQueue.push({
@@ -616,7 +627,7 @@ function spotifyListener () {
     }
 
     const { spotifySong, channel, id, context, url } = song
-    if (!checkId(id, channel)) {
+    if (!checkId(id, channel) || !checkDuration(spotifySong['minutes'], channel)) {
       spotify.setResponse(undefined)
       spotifyListenerLoop()
       return
@@ -663,8 +674,8 @@ function youtubeListener () {
       youtubeListenerLoop()
       return
     }
-    const { url, context, channel, id, snippet } = song
-    if (!checkId(id, channel)) {
+    const { url, context, channel, id, snippet, minutes } = song
+    if (!checkId(id, channel) || !checkDuration(minutes, channel)) {
       youtube.setResponse(undefined)
       youtubeListenerLoop()
       return
@@ -765,6 +776,15 @@ function checkId (id, channel) {
 function checkIfSomethingIsPlaying (channel) {
   if (!playing['spotify'] && !playing['youtube']) {
     client.say(channel, 'Nothing is playing right now!')
+    return false
+  }
+  return true
+}
+
+function checkDuration (minutes, channel) {
+  const maxLength = settings['limitations']['length']
+  if (maxLength > 0 && minutes >= maxLength) {
+    client.say(channel, `The song is longer than ${maxLength} minutes`)
     return false
   }
   return true
