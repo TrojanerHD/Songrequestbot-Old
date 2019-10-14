@@ -181,6 +181,8 @@ function onMessageHandler (target, context, msg, self) {
         client.say(target, 'This does not look like a correct youtube link')
         return
       }
+      if (!checkId(id, channel)) return
+
       request.get({
         url: `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${id}&key=${secrets['youtube']['key']}`,
         headers: {
@@ -351,15 +353,15 @@ async function main () {
           playing['spotify'] = true
 
         if (!playing['spotify'] && !playing['youtube'] && songRequestQueue['length'] !== 0) {
+          const id = songRequestQueue[0]['id']
           switch (songRequestQueue[0]['platform']) {
             case 'youtube':
-              nextSong = songRequestQueue[0]['id']
-              currentSong = { requester: songRequestQueue[0]['requester'] }
+              nextSong = id
+              currentSong = { requester: songRequestQueue[0]['requester'], id }
               playing['youtube'] = true
               songRequestQueue.shift()
               break
             case 'spotify':
-              const nextSongSpotify = songRequestQueue[0]['id']
               request.get({
                 url: 'https://api.spotify.com/v1/me/player/devices',
                 headers: {
@@ -375,7 +377,7 @@ async function main () {
                 },
                 body: {
                   uris: [
-                    `spotify:track:${nextSongSpotify}`
+                    `spotify:track:${id}`
                   ],
                   position_ms: 1
                 },
@@ -383,7 +385,7 @@ async function main () {
               }).catch(console.error)
             }
 
-              currentSong = { requester: songRequestQueue[0]['requester'] }
+              currentSong = { requester: songRequestQueue[0]['requester'], id }
               songRequestQueue.shift()
               playing['spotify'] = true
               updateFunction()
@@ -610,6 +612,11 @@ function spotifyListener () {
     }
 
     const { spotifySong, channel, id, context, url } = song
+    if (!checkId(id, channel)) {
+      spotify.setResponse(undefined)
+      spotifyListenerLoop()
+      return
+    }
     let artists = ''
     for (const artist of spotifySong['artists']) artists += artist['name'] + ', '
     artists = artists.replace(/, $/g, '')
@@ -653,6 +660,11 @@ function youtubeListener () {
       return
     }
     const { url, context, channel, id, snippet } = song
+    if (!checkId(id, channel)) {
+      youtube.setResponse(undefined)
+      youtubeListenerLoop()
+      return
+    }
     songRequestQueue.push({
       platform: 'youtube',
       title: snippet['title'],
@@ -735,4 +747,16 @@ function skipSong (channel, context) {
     viewersWhoWantToSkipTheTrack = []
     client.say(channel, `Alright, the song was ${context}.`)
   }
+}
+
+function checkId (id, channel) {
+  for (const request of songRequestQueue) if (request['id'] === id) {
+    client.say(channel, `${request['requester']} has already requested that song`)
+    return false
+  }
+  if (currentSong['id'] === id) {
+    client.say(channel, 'This song is currently playing')
+    return false
+  }
+  return true
 }
