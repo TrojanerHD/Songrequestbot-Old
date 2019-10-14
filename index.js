@@ -51,6 +51,7 @@ function onMessageHandler (target, context, msg, self) {
   const cmd = msg.split(' ')[0].toLowerCase()
 
   if (settings['commands']['skip'].includes(cmd)) {
+    if (!checkIfSomethingIsPlaying(channel)) return
     if (currentSong['requester'] === context['display-name']) {
       skipSong(channel, 'skipped')
       return
@@ -729,10 +730,7 @@ function skipSong (channel, context) {
     return
   }
 
-  if (!playing['spotify']) {
-    client.say(channel, 'Nothing is playing right now!')
-    return
-  }
+  if (!checkIfSomethingIsPlaying(channel)) return
   // if 25% of viewers said skip
   request.post({
     url: 'https://api.spotify.com/v1/me/player/next',
@@ -759,6 +757,14 @@ function checkId (id, channel) {
   }
   if (currentSong['id'] === id) {
     client.say(channel, 'This song is currently playing')
+    return false
+  }
+  return true
+}
+
+function checkIfSomethingIsPlaying (channel) {
+  if (!playing['spotify'] && !playing['youtube']) {
+    client.say(channel, 'Nothing is playing right now!')
     return false
   }
   return true
