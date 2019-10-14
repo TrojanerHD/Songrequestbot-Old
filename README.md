@@ -68,7 +68,7 @@ Notes:
       "songrequest"
     ]
     ```
-    The keys for the commands are `songrequest`, `forceskip`, `skip` and `wrongsong`; if you do not provide a command in the settings, those keys will be used as default triggers. If the array is empty, the command will be disabled.
+    The keys for the commands are `songrequest`, `forceskip`, `skip`, `wrongsong` and `currentsong`; if you do not provide a command in the settings, those keys will be used as default triggers. If the array is empty, the command will be disabled.
 + The `disabled` object is currently being used to disable services. Inside the services you can either insert `"spotify"` or `"youtube"`.
 + The `reduced-debugging` boolean is being used to control whether the bot should write complete messages with detailed info or only [error codes](#error-codes).
 + In `properties -> skip -> viewers` you can define how many viewers will have to type in `!skip` (by default) in order to skip the song. You can either type `NUMBER` (absolute value, example: `12`) or `NUMBER%` (relative value, example: `12%`). If you do not provide this setting, the default (`25%`) will be used.

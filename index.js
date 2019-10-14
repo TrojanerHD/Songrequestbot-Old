@@ -45,7 +45,7 @@ if (!('limitations' in settings)) settings['limitations'] = {}
 if (!('length' in settings['limitations'])) settings['limitations']['length'] = 0
 if (!('requests' in settings['limitations'])) settings['limitations']['requests'] = 0
 
-const allCommands = ['skip', 'forceskip', 'songrequest', 'wrongsong']
+const allCommands = ['skip', 'forceskip', 'songrequest', 'wrongsong', 'currentsong']
 for (const command of allCommands) if (!(command in settings['commands'])) settings['commands'][command] = [command]
 
 function onMessageHandler (target, context, msg, self) {
@@ -244,6 +244,7 @@ function onMessageHandler (target, context, msg, self) {
     else if (enabledServices.includes('youtube'))
       youtube.searchForSong(allArgs, secrets, context, channel)
   }
+  if (settings['commands']['currentsong'].includes(cmd)) client.say(channel, `Currently playing: ${currentSong['title']} by ${currentSong['artists']}`)
 }
 
 // Twitch Stuff
@@ -380,11 +381,11 @@ async function main () {
           playing['spotify'] = true
 
         if (!playing['spotify'] && !playing['youtube'] && songRequestQueue['length'] !== 0) {
-          const id = songRequestQueue[0]['id']
+          const { id, artists, title, requester } = songRequestQueue[0]
           switch (songRequestQueue[0]['platform']) {
             case 'youtube':
               nextSong = id
-              currentSong = { requester: songRequestQueue[0]['requester'], id }
+              currentSong = { requester, id, artists, title }
               playing['youtube'] = true
               songRequestQueue.shift()
               break
@@ -412,7 +413,7 @@ async function main () {
               }).catch(console.error)
             }
 
-              currentSong = { requester: songRequestQueue[0]['requester'], id }
+              currentSong = { requester, id, artists, title }
               songRequestQueue.shift()
               playing['spotify'] = true
               updateFunction()
