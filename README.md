@@ -44,7 +44,7 @@ Location: [home](https://en.wikipedia.org/wiki/Home_directory#Default_home_direc
     }
   },
   "limitations": {
-    "length": LENGTH
+    "length": 0
   },
   "reduced-debugging": false
 }
