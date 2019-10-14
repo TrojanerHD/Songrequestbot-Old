@@ -24,27 +24,39 @@ Note: For now, there is no installer for Linux and macOS and you will have to de
 You have to create two files inside the folder where you unpacked the zip.
 ##### settings.json
 ```json
-  {
-      "twitch": {
-        "username": "YOUR_TWITCH_USERNAME"
-      },
-      "commands": {
-        "songrequest": [
+{
+  "twitch": {
+    "username": "YOUR_TWITCH_USERNAME"
+  },
+  "commands": {
+    "COMMAND": [
 
-        ]
-      },
-      "disabled": {
-        "services": [
-          
-        ]
-      },
-      "reduced-debugging": false
-  }
+    ]
+  },
+  "disabled": {
+    "services": [
+    ]
+  },
+  "properties": {
+    "skip": {
+      "viewers": "25%"
+    }
+  },
+  "reduced-debugging": false
+}
 ```
 Notes:
-+ The `songrequest` array is used to determine which commands will be recognized as song request commands. For example you could insert `"sr"` there.
++ The `COMMAND` array is being used to define the commands users will have to use in order to trigger the commands. For example, you could write:
+    ```json
+    "songrequest": [
+      "sr",
+      "songrequest"
+    ]
+    ```
+    The keys for the commands are `songrequest`, `forceskip`, `skip` and `wrongsong`; if you do not provide a command in the settings, those keys will be used as default triggers. If the array is empty, the command will be disabled.
 + The `disabled` object is currently being used to disable services. Inside the services you can either insert `"spotify"` or `"youtube"`
 + The `reduced-debugging` boolean is being used to control whether the bot should write complete messages with detailed info or only [error codes](#error-codes)
++ In `properties -> skip -> viewers` you can define how many viewers will have to type in `!skip` (by default) in order to skip the song. You can either type `NUMBER` (absolute value, example: `12`) or `NUMBER%` (relative value, example: `12%`). If you do not provide this setting, the default (`25%`) will be used.
 ##### secrets.json
   ```json
    {
