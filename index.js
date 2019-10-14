@@ -244,7 +244,7 @@ function onMessageHandler (target, context, msg, self) {
     else if (enabledServices.includes('youtube'))
       youtube.searchForSong(allArgs, secrets, context, channel)
   }
-  if (settings['commands']['currentsong'].includes(cmd)) client.say(channel, `Currently playing: ${currentSong['title']} by ${currentSong['artists']}`)
+  if (settings['commands']['currentsong'].includes(cmd)) if (checkIfSomethingIsPlaying(channel)) client.say(channel, `Currently playing: ${currentSong['title']} by ${currentSong['artists']}`)
 }
 
 // Twitch Stuff
