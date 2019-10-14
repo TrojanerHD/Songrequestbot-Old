@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require('electron')
+const { app, BrowserWindow, shell } = require('electron')
 const { autoUpdater } = require('electron-updater')
 
 // noinspection JSIgnoredPromiseFromCall
@@ -18,6 +18,14 @@ function createElectronInstance () {
       }
     })
     win.loadURL(`file://${__dirname}/html/index.html`)
+    const openExternalLinksInOSBrowser = (event, url) => {
+      if (url.match(/.*localhost.*/gi) === null && url.match(/http(s|):/)) {
+        event.preventDefault()
+        shell.openExternal(url)
+      }
+    }
+    win.webContents.on('new-window', openExternalLinksInOSBrowser)
+    win.webContents.on('will-navigate', openExternalLinksInOSBrowser)
   }
 
   app.on('ready', createWindow)
