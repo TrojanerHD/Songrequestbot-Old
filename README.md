@@ -5,10 +5,20 @@ Plays music using Spotify or YouTube, requested from Twitch chat.
 These instructions will show you how to install and use the bot.
 
 ### Installing / Using
-First, download the .exe on the [releases-page](https://github.com/TrojanerHD/Songrequestbot/releases). Double-click it and follow the installer instructions. In this version, you will have to create a [settings.json](#settingsjson). Optionally, start Spotify either in a browser or the application.
+First, download the .exe on the [releases-page](https://github.com/TrojanerHD/Songrequestbot/releases). Double-click it and follow the installer instructions. In this version, you will have to create a [settings.json](#settingsjson). You can also provide a [secrets.json](#secretsjson-in-using) if you want to use a custom account for the Songrequestbot. Additionally, you can start Spotify either in a browser or the application.
 
 Now you can execute the program using the exe inside the installation folder and should see a window with a YouTube player which will play YouTube videos and the Spotify player is used to play Spotify songs after you have logged in as the alert will tell you.
-
+#### secrets.json (in using)
+Location: [home](https://en.wikipedia.org/wiki/Home_directory#Default_home_directory_per_operating_system)/Songrequestbot/secrets.json
+```json
+{
+  "twitch": {
+     "client-id": "CLIENT_ID_OF_APPLICATION",
+     "password": "PASSWORD_OF_APPLICATION"
+   }
+}
+```
+For more information about what client-id and password mean, see [secrets.json (in deployment)](#secretsjson-in-deployment) 
 ### Deployment / Installing on Unix-based-systems
 Note: For now, there is no installer for Linux and macOS and you will have to deploy the bot. You may test it with [wine](https://www.winehq.org/) but this is not explicitly supported and may not work at all or lead to bugs
 #### Prerequisites
@@ -23,7 +33,7 @@ Note: For now, there is no installer for Linux and macOS and you will have to de
 
 Now you have to create two files.
 ##### settings.json
-Location: [home](https://en.wikipedia.org/wiki/Home_directory#Default_home_directory_per_operating_system) /Songrequestbot/settings.json
+Location: [home](https://en.wikipedia.org/wiki/Home_directory#Default_home_directory_per_operating_system)/Songrequestbot/settings.json
 ```json
 {
   "twitch": {
@@ -64,7 +74,7 @@ Notes:
 + In `properties -> skip -> viewers` you can define how many viewers will have to type in `!skip` (by default) in order to skip the song. You can either type `NUMBER` (absolute value, example: `12`) or `NUMBER%` (relative value, example: `12%`). If you do not provide this setting, the default (`25%`) will be used.
 + `limitations -> length` determines how long (in minutes) a track can be. If no value is provided or the value is `0`, the track's length is unlimited.
 + `limitations -> requests` determines how many songs of a viewer can be in the queue at the same time
-##### secrets.json
+##### secrets.json (in deployment)
 Location: The folder where you unpacked the zip
   ```json
    {
@@ -73,8 +83,8 @@ Location: The folder where you unpacked the zip
        "secret": "YOUR_SECRET"
      },
      "twitch": {
-       "password": "PASSWORD_OF_APPLICATION",
-       "client-id": "CLIENT_ID_OF_APPLICATION"
+       "client-id": "CLIENT_ID_OF_APPLICATION",
+       "password": "PASSWORD_OF_APPLICATION"
      },
      "youtube": {
        "key": "YOUTUBE_KEY"

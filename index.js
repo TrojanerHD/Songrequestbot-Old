@@ -14,9 +14,13 @@ const fs = require('fs')
 const currentDir = __dirname.match(/app\.asar/) ? path.dirname(path.dirname(path.dirname(__filename)).replace('app.asar', '')) : __dirname
 const secrets = require(`${__dirname}/secrets`)
 let songRequestQueue = []
-const settingsSetup = require(`${__dirname}/settings.js`)
-settingsSetup.initialize()
-const settings = require(settingsSetup.getSettingsPath())
+const rootPath = require(`${__dirname}/settings.js`)
+rootPath.initialize()
+if (fs.existsSync(`${rootPath.getPath('secrets')}.json`)) {
+  const altSecrets = require(rootPath.getPath('secrets'))
+  if ('twitch' in altSecrets) secrets['twitch'] = altSecrets['twitch']
+}
+const settings = require(rootPath.getPath('settings'))
 const playing = { 'spotify': false, 'youtube': false }
 const spotify = require(`${__dirname}/spotify`)
 const electron = require(`${__dirname}/electron`)
@@ -35,7 +39,7 @@ if ('disabled' in settings && 'services' in settings['disabled'] && !settings['d
 if ('disabled' in settings && 'services' in settings['disabled'] && !settings['disabled']['services'].includes('spotify'))
   enabledServices.push('spotify')
 if (!('commands' in settings)) settings['commands'] = {}
-if (!('twitch' in settings) || !('username' in settings['twitch'])) scheduledAlertMessage.push(`You must provide your username under ${settingsSetup.getSettingsPath()}: \n{\n  "twitch": {\n    "username": "USERNAME"\n  }\n}\nThen restart the bot`)
+if (!('twitch' in settings) || !('username' in settings['twitch'])) scheduledAlertMessage.push(`You must provide your username under ${rootPath.getSettingsPath()}: \n{\n  "twitch": {\n    "username": "USERNAME"\n  }\n}\nThen restart the bot`)
 
 if (!('limitations' in settings)) settings['limitations'] = {}
 if (!('length' in settings['limitations'])) settings['limitations']['length'] = 0
