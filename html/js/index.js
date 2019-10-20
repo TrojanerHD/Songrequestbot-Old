@@ -67,7 +67,7 @@ function onYouTubePlayerAPIReady () {
 
 // autoplay video
 function onPlayerReady (event) {
-  update()
+  // update()
   event['target'].playVideo()
 }
 

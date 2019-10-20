@@ -6,7 +6,7 @@ module.exports = {
   setResponse
 }
 
-function searchForSong (allArgs, secrets, context, channel) {
+function searchForSong (allArgs, secrets, context, channel, origin) {
   request.get({
     url: `https://www.googleapis.com/youtube/v3/search?q=${allArgs}&part=snippet&key=${secrets['youtube']['key']}&type=video&videoEmbeddable=true`,
     headers: {
@@ -16,13 +16,16 @@ function searchForSong (allArgs, secrets, context, channel) {
   }).then(searchResults).catch(console.error)
 
   function searchResults (body) {
-    if (!('items' in body) || body['items']['length'] === 0)
+    if (!('items' in body) || body['items']['length'] === 0) {
       response = {
         error: {
           reason: 'no-match',
-          channel
+          channel,
+          origin
         }
       }
+      return
+    }
     const id = body['items'][0]['id']['videoId']
     request.get({
       url: `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${id}&key=${secrets['youtube']['key']}`,
@@ -37,7 +40,8 @@ function searchForSong (allArgs, secrets, context, channel) {
         response = {
           error: {
             reason: 'no-match',
-            channel
+            channel,
+            origin
           }
         }
         return
@@ -56,7 +60,8 @@ function searchForSong (allArgs, secrets, context, channel) {
         channel,
         snippet,
         id,
-        minutes: duration.match('M') ? parseInt(duration.split('M')[0]) + hours * 60 : hours * 60
+        minutes: duration.match('M') ? parseInt(duration.split('M')[0]) + hours * 60 : hours * 60,
+        origin
       }
 
     }

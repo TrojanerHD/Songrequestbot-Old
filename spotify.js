@@ -9,7 +9,7 @@ module.exports = {
   searchForSong
 }
 
-function getUrl (allArgs, channel, context) {
+function getUrl (allArgs, channel, context, origin) {
   if (!accessToken) return
   const id = allArgs.split('/')[allArgs.split('/')['length'] - 1].split('?')[0]
   request.get({
@@ -27,7 +27,8 @@ function getUrl (allArgs, channel, context) {
       channel,
       id,
       context,
-      url: allArgs.split('?')[0]
+      url: allArgs.split('?')[0],
+      origin
     }
   }
 }
@@ -44,7 +45,7 @@ function setResponse (newResponse) {
   response = newResponse
 }
 
-function searchForSong (allArgs, channel, target, context, msg, self) {
+function searchForSong (allArgs, channel, args, origin, context) {
   if (!accessToken) return
   request.get({
     url: `https://api.spotify.com/v1/search?q=${encodeURIComponent(allArgs)}&type=track&limit=1`,
@@ -59,10 +60,10 @@ function searchForSong (allArgs, channel, target, context, msg, self) {
       response = {
         error: {
           reason: 'update-access-token',
-          target,
-          context,
-          self,
-          msg
+          args,
+          origin,
+          channel,
+          context
         }
       }
       return
@@ -74,7 +75,8 @@ function searchForSong (allArgs, channel, target, context, msg, self) {
           reason: 'no-results',
           allArgs,
           context,
-          channel
+          channel,
+          origin
         }
       }
       return
@@ -91,7 +93,8 @@ function searchForSong (allArgs, channel, target, context, msg, self) {
       channel,
       id: song['id'],
       context,
-      url: song['external_urls']['spotify']
+      url: song['external_urls']['spotify'],
+      origin
     }
   }
 }

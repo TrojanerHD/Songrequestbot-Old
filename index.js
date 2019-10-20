@@ -34,6 +34,9 @@ const client_id = secrets['spotify']['id'] // Your client id
 const client_secret = secrets['spotify']['secret'] // Your secret
 const enabledServices = []
 let currentSong = {}
+const discord = require(`${__dirname}/discord`)
+const { RichEmbed } = require('discord.js')
+discord.initialize(secrets['discord']['token'])
 if ('disabled' in settings && 'services' in settings['disabled'] && !settings['disabled']['services'].includes('youtube'))
   enabledServices.push('youtube')
 if ('disabled' in settings && 'services' in settings['disabled'] && !settings['disabled']['services'].includes('spotify'))
@@ -111,7 +114,7 @@ function onMessageHandler (target, context, msg, self) {
       if (isMod) {
         if (playing['youtube']) {
           client.say(channel, 'Alright, the song was skipped.')
-          youtubeSkip = true
+          discord.skip()
           return
         }
         if (!playing['spotify']) {
@@ -159,91 +162,7 @@ function onMessageHandler (target, context, msg, self) {
     else client.say(channel, 'You cannot do that since there is no song request from you')
     return
   }
-  if (settings['commands']['songrequest'].includes(cmd)) {
-    if (args['length'] === 0) {
-      client.say(channel, `You have to specify the name/url of the track (!${settings['commands']['songrequest'][0]} <query>)`)
-      return
-    }
-    const songRequestsByUser = []
-    for (const request of songRequestQueue) if (request['requester'] === context['display-name']) songRequestsByUser.push(request)
-    const requestLimitations = settings['limitations']['requests']
-    if (requestLimitations > 0 && songRequestsByUser['length'] >= requestLimitations) {
-      client.say(channel, `You have already requested a maximum of ${requestLimitations} songs`)
-      return
-    }
-
-    let allArgs = ''
-    for (const arg of args) allArgs += `${arg} `
-    allArgs = allArgs.replace(/ $/g, '')
-
-    if (allArgs.match(/^http(s|):\/\/open\.spotify\.com\/track\/.*/g)) {
-      spotify.getUrl(allArgs, channel, context)
-      return
-    }
-
-    if (allArgs.match(/^(http(s|):\/\/|)(www.|)youtube.com\/watch\?v=.*/)) {
-      if (enabledServices.includes('youtube'))
-        addYouTubeVideo(allArgs.split(/[?&]v=/)[1].split('&')[0])
-      else client.say(channel, `${channel} has not activated YouTube. Please use only Spotify for song requests`)
-      return
-    }
-
-    if (allArgs.match(/^(http(s|):\/\/|)youtu.be\/.*/g)) {
-      if (enabledServices.includes('youtube'))
-        addYouTubeVideo(allArgs.split('/')[allArgs.split('/')['length'] - 1].split('?')[0])
-      else client.say(channel, `${channel} has not activated YouTube. Please use only Spotify for song requests`)
-      return
-    }
-
-    function addYouTubeVideo (id) {
-      if (id.match(/[?&]/)) {
-        client.say(target, 'This does not look like a correct youtube link')
-        return
-      }
-      if (!checkId(id, channel)) return
-
-      request.get({
-        url: `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${id}&key=${secrets['youtube']['key']}`,
-        headers: {
-          Accept: 'application/json'
-        },
-        json: true
-      }).then(youtubeTitle).catch(console.error)
-
-      function youtubeTitle (body) {
-        let duration = body['items'][0]['contentDetails']['duration'].replace(/^PT/, '')
-        let hours = 0
-        if (duration.match('H')) {
-          hours = duration.split('H')[0]
-          duration = duration.split('H')[1]
-        }
-        const minutes = duration.match('M') ? parseInt(duration.split('M')[0]) + hours * 60 : hours * 60
-        if (!checkDuration(minutes, channel)) return
-        const snippet = body['items'][0]['snippet']
-        const url = `https://youtu.be/${id}`
-        songRequestQueue.push({
-          platform: 'youtube',
-          title: snippet['title'],
-          artists: snippet['channelTitle'],
-          url,
-          id,
-          requester: context['display-name']
-        })
-        addTrack(channel, {
-          song: id,
-          platform: 'youtube',
-          url,
-          name: snippet['title'],
-          artists: snippet['channelTitle']
-        })
-      }
-    }
-
-    if (enabledServices.includes('spotify'))
-      spotify.searchForSong(allArgs, channel, target, context, msg, self)
-    else if (enabledServices.includes('youtube'))
-      youtube.searchForSong(allArgs, secrets, context, channel)
-  }
+  if (settings['commands']['songrequest'].includes(cmd)) songrequest('Twitch', channel, args, context)
   if (settings['commands']['currentsong'].includes(cmd)) if (checkIfSomethingIsPlaying(channel)) client.say(channel, `Currently playing: ${currentSong['title']} by ${currentSong['artists']}`)
 }
 
@@ -381,10 +300,11 @@ async function main () {
           playing['spotify'] = true
 
         if (!playing['spotify'] && !playing['youtube'] && songRequestQueue['length'] !== 0) {
-          const { id, artists, title, requester } = songRequestQueue[0]
+          const { id, artists, title, requester, url } = songRequestQueue[0]
           switch (songRequestQueue[0]['platform']) {
             case 'youtube':
               nextSong = id
+              discord.play(url)
               currentSong = { requester, id, artists, title }
               playing['youtube'] = true
               songRequestQueue.shift()
@@ -579,14 +499,15 @@ async function main () {
 
 // noinspection JSIgnoredPromiseFromCall
 main()
-
+/*
 ipcMain.on('done', youtubeVideoDone)
 
 function youtubeVideoDone () {
   if (nextSong !== undefined) return
   playing['youtube'] = false
-}
+}*/
 
+/*
 ipcMain.on('refresh', onYoutubePlayerRefresh)
 
 function onYoutubePlayerRefresh (event) {
@@ -597,6 +518,23 @@ function onYoutubePlayerRefresh (event) {
   }
   if (alertScheduled) scheduledAlertMessage.shift()
   nextSong = undefined
+}
+*/
+
+discordListener()
+
+function discordListener () {
+  const { finished, discordSongrequest } = discord.refresh()
+  if (finished) playing['youtube'] = false
+  if (discordSongrequest !== null) {
+    const { channel, args, context } = discordSongrequest
+    songrequest('Discord', channel, args, context)
+  }
+  discordListenerLoop()
+}
+
+function discordListenerLoop () {
+  setTimeout(discordListener, 2000)
 }
 
 ipcMain.on('skip-and-queue', youtubeSkipRequest)
@@ -617,21 +555,24 @@ function deleteSongRequest (event, args) {
 }
 
 function spotifyListener () {
-  const song = spotify.refresh()
-  if (song !== undefined) {
-    if ('error' in song) {
-      const error = song['error']
+  const response = spotify.refresh()
+  if (response !== undefined) {
+    if ('error' in response) {
+      const error = response['error']
       switch (error['reason']) {
         case 'update-access-token':
           updateAccessToken()
-          onMessageHandler(error['target'], error['context'], error['msg'], error['self'])
+          songrequest(error['origin'], error['channel'], error['args'], error['context'])
           break
         case 'no-results':
-          const allArgs = error['allArgs']
-          const channel = error['channel']
+          const { allArgs, channel, origin } = error
           if (enabledServices.includes('youtube'))
-            youtube.searchForSong(allArgs, secrets, error['context'], channel)
-          else client.say(channel, 'There were no matches. Try it again with other search parameters or create a request with the direct link of that song from Spotify.')
+            youtube.searchForSong(allArgs, secrets, error['context'], channel, origin)
+          else {
+            const message = 'There were no matches. Try again with other search parameters or create a request with the direct link of that song from Spotify.'
+            if (origin === 'Twitch') client.say(channel, message)
+            else channel.send(message)
+          }
           spotify.setResponse(undefined)
           break
       }
@@ -639,8 +580,8 @@ function spotifyListener () {
       return
     }
 
-    const { spotifySong, channel, id, context, url } = song
-    if (!checkId(id, channel) || !checkDuration(spotifySong['minutes'], channel)) {
+    const { spotifySong, channel, id, context, url, origin } = response
+    if (!checkId(id, channel, origin) || !checkDuration(spotifySong['minutes'], channel, origin)) {
       spotify.setResponse(undefined)
       spotifyListenerLoop()
       return
@@ -662,7 +603,7 @@ function spotifyListener () {
       url,
       name: spotifySong['name'],
       artists
-    })
+    }, origin)
     spotify.setResponse(undefined)
   }
   spotifyListenerLoop()
@@ -679,15 +620,17 @@ function youtubeListener () {
   if (song !== undefined) {
     if ('error' in song) {
       const error = song['error']
-      const channel = error['channel']
       if (error['reason'] === 'no-match') {
-        client.say(channel, `There were no matches. Try it again with other search parameters or create a request with the direct link of that song from ${enabledServices.includes('spotify') ? 'Spotify/' : ''}YouTube.`)
+        const { channel, origin } = error
+        const message = `There were no matches. Try it again with other search parameters or create a request with the direct link of that song from ${enabledServices.includes('spotify') ? 'Spotify/' : ''}YouTube.`
+        if (origin === 'Twitch') client.say(channel, message)
+        else channel.send(message)
         youtube.setResponse(undefined)
       }
       youtubeListenerLoop()
       return
     }
-    const { url, context, channel, id, snippet, minutes } = song
+    const { url, context, channel, id, snippet, minutes, origin } = song
     if (!checkId(id, channel) || !checkDuration(minutes, channel)) {
       youtube.setResponse(undefined)
       youtubeListenerLoop()
@@ -707,7 +650,7 @@ function youtubeListener () {
       url,
       name: snippet['title'],
       song: id
-    })
+    }, origin)
     youtube.setResponse(undefined)
   }
   youtubeListenerLoop()
@@ -719,13 +662,23 @@ function youtubeListenerLoop () {
   setTimeout(youtubeListener, 2000)
 }
 
-function addTrack (channel, songRequest) {
+function addTrack (channel, songRequest, origin) {
   // song,
   // platform: 'spotify' | 'youtube',
   // artists,
   // url,
   // name
-  client.say(channel, `${songRequest['name'].replace(/^([!\/.])/, '') !== undefined && songRequest['artists'] !== undefined ? `${songRequest['name'].replace(/^([!\/.])/, '')} by ${songRequest['artists']}` : 'Your song'} is in the queue on place ${songRequestQueue['length']}`/* | ${songRequest['url']}`*/)
+  const message = `${songRequest['name'].replace(/^([!\/.])/, '') !== undefined && songRequest['artists'] !== undefined ? `${songRequest['name'].replace(/^([!\/.])/, '')} by ${songRequest['artists']}` : 'Your song'} is in the queue on place ${songRequestQueue['length']}`/* | ${songRequest['url']}`*/
+  if (origin === 'Twitch') client.say(channel, message)
+  else {
+    const embed = new RichEmbed()
+    if (songRequest['name'].replace(/^([!\/.])/, '' !== undefined))
+      embed.addField('Track', `[${songRequest['name']}](${songRequest['url']})`)
+    if (songRequest['artists'] !== undefined)
+      embed.addField(`Artist${songRequest['artists'].match(/,/) ? 's' : ''}`, songRequest['artists'])
+    embed.addField('Queue', `Place ${songRequestQueue['length']}`)
+    channel.send(embed)
+  }
 }
 
 function updateAccessToken () {
@@ -749,7 +702,7 @@ function updateAccessToken () {
 function skipSong (channel, context) {
   if (playing['youtube']) {
     client.say(channel, `Alright, the song was ${context}.`)
-    youtubeSkip = true
+    discord.skip()
     viewersWhoWantToSkipTheTrack = []
     return
   }
@@ -774,7 +727,7 @@ function skipSong (channel, context) {
   }
 }
 
-function checkId (id, channel) {
+function checkId (id, channel, origin) {
   for (const request of songRequestQueue) if (request['id'] === id) {
     client.say(channel, `${request['requester']} has already requested that song`)
     return false
@@ -794,11 +747,112 @@ function checkIfSomethingIsPlaying (channel) {
   return true
 }
 
-function checkDuration (minutes, channel) {
+function checkDuration (minutes, channel, origin) {
   const maxLength = settings['limitations']['length']
   if (maxLength > 0 && minutes >= maxLength) {
-    client.say(channel, `The song is longer than ${maxLength} minutes`)
+    const message = `The song is longer than ${maxLength} minutes`
+    if (origin === 'Twitch') client.say(channel, message)
+    else channel.send(message)
     return false
   }
   return true
+}
+
+process.on('SIGINT', onSigint)
+
+function onSigint () { process.exit() }
+
+function songrequest (origin, channel, args, context) {
+  if (args['length'] === 0) return `You have to specify the name/url of the track (!${settings['commands']['songrequest'][0]} <query>)`
+  const songRequestsByUser = []
+  for (const request of songRequestQueue) if (request['requester'] === context['display-name']) songRequestsByUser.push(request)
+  const requestLimitations = settings['limitations']['requests']
+  if (requestLimitations > 0 && songRequestsByUser['length'] >= requestLimitations) {
+    const message = `You have already requested a maximum of ${requestLimitations} songs`
+    if (origin === 'Twitch') client.say(channel, message)
+    else channel.send(message)
+    return
+  }
+
+  let allArgs = ''
+  for (const arg of args) allArgs += `${arg} `
+  allArgs = allArgs.replace(/ $/g, '')
+
+  if (allArgs.match(/^http(s|):\/\/open\.spotify\.com\/track\/.*/g)) {
+    spotify.getUrl(allArgs, channel, context, origin)
+    return
+  }
+
+  if (allArgs.match(/^(http(s|):\/\/|)(www.|)youtube.com\/watch\?v=.*/)) {
+    if (enabledServices.includes('youtube'))
+      addYouTubeVideo(allArgs.split(/[?&]v=/)[1].split('&')[0])
+    else {
+      const message = 'Song requests are disabled'
+      if (origin === 'Twitch') client.say(channel, message)
+      else channel.send(message)
+    }
+    return
+  }
+
+  if (allArgs.match(/^(http(s|):\/\/|)youtu.be\/.*/g)) {
+    if (enabledServices.includes('youtube'))
+      addYouTubeVideo(allArgs.split('/')[allArgs.split('/')['length'] - 1].split('?')[0])
+    else {
+      const message = `YouTube is not activated. Please use only Spotify for song requests`
+      if (origin === 'Twitch') client.say(channel, message)
+      else channel.send(message)
+    }
+    return
+  }
+
+  function addYouTubeVideo (id) {
+    if (id.match(/[?&]/)) {
+      const message = 'This does not look like a correct youtube link'
+      if (origin === 'Twitch') client.say(target, message)
+      else channel.send(message)
+      return
+    }
+    if (!checkId(id, channel, origin)) return
+
+    request.get({
+      url: `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${id}&key=${secrets['youtube']['key']}`,
+      headers: {
+        Accept: 'application/json'
+      },
+      json: true
+    }).then(youtubeTitle).catch(console.error)
+
+    function youtubeTitle (body) {
+      let duration = body['items'][0]['contentDetails']['duration'].replace(/^PT/, '')
+      let hours = 0
+      if (duration.match('H')) {
+        hours = duration.split('H')[0]
+        duration = duration.split('H')[1]
+      }
+      const minutes = duration.match('M') ? parseInt(duration.split('M')[0]) + hours * 60 : hours * 60
+      if (!checkDuration(minutes, channel)) return
+      const snippet = body['items'][0]['snippet']
+      const url = `https://youtu.be/${id}`
+      songRequestQueue.push({
+        platform: 'youtube',
+        title: snippet['title'],
+        artists: snippet['channelTitle'],
+        url,
+        id,
+        requester: context['display-name']
+      })
+      addTrack(channel, {
+        song: id,
+        platform: 'youtube',
+        url,
+        name: snippet['title'],
+        artists: snippet['channelTitle']
+      }, origin)
+    }
+  }
+
+  if (enabledServices.includes('spotify'))
+    spotify.searchForSong(allArgs, channel, args, origin, context)
+  else if (enabledServices.includes('youtube'))
+    youtube.searchForSong(allArgs, secrets, context, channel, origin)
 }
